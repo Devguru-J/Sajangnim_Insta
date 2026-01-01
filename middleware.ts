@@ -2,8 +2,13 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 
-export function middleware(request: NextRequest) {
-    const response = NextResponse.next();
+import { updateSession } from '@/utils/supabase/middleware';
+
+export async function middleware(request: NextRequest) {
+    // 1. Refresh Supabase session
+    const response = await updateSession(request);
+
+    // 2. Existing Visitor ID logic
     const visitorId = request.cookies.get('visitor_id')?.value;
 
     if (!visitorId) {

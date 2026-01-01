@@ -61,7 +61,7 @@ export default function PricingPage() {
                     <div className="space-y-6">
                         <h3 className="text-xl font-bold text-primary">베이직 (Basic)</h3>
                         <div className="flex items-baseline gap-1">
-                            <span className="text-5xl md:text-6xl font-black text-text-main dark:text-white">5,900원</span>
+                            <span className="text-5xl md:text-6xl font-black text-text-main dark:text-white">3,000원</span>
                             <span className="text-xl font-bold text-text-sub dark:text-gray-400">/월</span>
                         </div>
                         <div className="bg-orange-50 dark:bg-primary/10 p-4 rounded-xl text-center text-primary font-bold">
