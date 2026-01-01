@@ -13,8 +13,8 @@ export default function Home() {
                 <span className="text-sm font-bold">카페 · 미용실 사장님 필수 앱</span>
               </div>
               <h1 className="text-4xl lg:text-6xl font-black tracking-tight text-text-main dark:text-white leading-[1.15] mb-6">
-                인스타에 올릴 글,<br />
-                오늘도 막막하시죠?
+                매일 쓰는 인스타,<br />
+                막막하시죠?
               </h1>
               <p className="text-lg text-text-sub dark:text-gray-400 mb-6 max-w-2xl mx-auto lg:mx-0 leading-relaxed">
                 광고처럼 안 보이지만 손님 반응을 부르는 인스타 글,<br className="hidden lg:block" /> 사장님 대신 써드립니다.
@@ -67,7 +67,7 @@ export default function Home() {
       <section className="py-20 bg-white dark:bg-neutral-900">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-text-main dark:text-white mb-4">장사하면서 인스타까지 신경 쓰기 힘들잖아요.</h2>
+            <h2 className="text-3xl font-bold text-text-main dark:text-white mb-4">우리집 정말 맛집인데.. SNS에 홍보하기가 어렵다면?</h2>
             <p className="text-text-sub dark:text-gray-400">사장님의 마케팅 고민을 해결해 드리는 세 가지 약속</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
