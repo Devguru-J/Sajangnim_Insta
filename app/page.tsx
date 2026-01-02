@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import HeroSpline from "@/components/HeroSpline";
 
 export default function Home() {
   return (
@@ -30,33 +31,8 @@ export default function Home() {
               </p>
             </div>
             <div className="flex-1 w-full max-w-[500px] lg:max-w-none">
-              <div className="relative group">
-                <div className="absolute -inset-1 bg-gradient-to-r from-primary to-orange-300 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
-                <div className="relative bg-white dark:bg-neutral-800 rounded-xl overflow-hidden shadow-2xl border border-gray-100 dark:border-white/10 aspect-[4/3] flex items-center justify-center bg-gray-100">
-                  <Image
-                    src="/hero-example.png"
-                    alt="인스타그램 게시물 예시"
-                    fill
-                    className="object-cover"
-                    priority
-                  />
-                  <div className="absolute bottom-6 left-6 right-6 bg-white/90 dark:bg-black/80 backdrop-blur-sm p-4 rounded-lg shadow-lg">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="size-10 rounded-full bg-gray-200 overflow-hidden relative">
-                        {/* Avatar placeholder, could be replaced with an image too */}
-                        <div className="absolute inset-0 bg-primary/20"></div>
-                      </div>
-                      <div>
-                        <div className="h-3 w-24 bg-gray-300 dark:bg-gray-600 rounded mb-1"></div>
-                        <div className="h-2 w-16 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="h-2 w-full bg-gray-200 dark:bg-gray-700 rounded"></div>
-                      <div className="h-2 w-5/6 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                    </div>
-                  </div>
-                </div>
+              <div className="relative w-full aspect-square lg:aspect-auto lg:h-[600px] rounded-3xl overflow-hidden bg-gray-100 dark:bg-white/5 shadow-2xl border border-gray-200 dark:border-white/10">
+                <HeroSpline />
               </div>
             </div>
           </div>
