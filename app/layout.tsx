@@ -24,13 +24,28 @@ export default async function RootLayout({
   const { data: { user } } = await supabase.auth.getUser();
 
   return (
-    <html lang="ko">
+    <html lang="ko" suppressHydrationWarning>
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  const stored = localStorage.getItem('theme');
+                  const theme = stored || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+                  if (theme === 'dark') {
+                    document.documentElement.classList.add('dark');
+                  }
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
         <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
       </head>
-      <body className="antialiased min-h-screen flex flex-col bg-background-light dark:bg-background-dark text-text-main dark:text-white">
+      <body className="antialiased min-h-screen flex flex-col bg-white dark:bg-zinc-950 text-[#1F1F1F] dark:text-zinc-100" suppressHydrationWarning>
         <Navbar user={user || undefined} />
-        <main className="flex-grow">
+        <main className="flex-grow bg-white dark:bg-zinc-950">
           {children}
         </main>
         <Footer />

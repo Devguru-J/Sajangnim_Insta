@@ -1,101 +1,73 @@
-# WALKTHROUGH — 사장님 인스타 (실사용/QA/테스트 시나리오)
+# Recent Updates Walkthrough
 
-## 0) 테스트 전 준비
-- 테스트 기기: iPhone (모바일 우선)
-- 테스트 계정 없이 진행 (visitor_id 쿠키)
-- Stripe는 테스트 모드로 먼저 검증 후 실결제 진행
+## 1. Theme & UI Refinement
 
----
+### Problem
+- The site had inconsistent colors between light/dark modes.
+- The Navbar had a "gray overlay" issue due to transparency overlapping with page backgrounds.
+- Dropdowns lacked visual indicators.
 
-## 1) 랜딩 진입 (/)
-사용자가 보는 것:
-- “인스타에 올릴 글, 오늘도 사장님 손 멈췄나요?”
-- “광고처럼 안 보이지만 손님 반응을 부르는 글”
-
-행동:
-- CTA “오늘 올릴 글 지금 만들기” 클릭
-
-성공 기준:
-- 설명 없이 generate로 이동
+### Solution
+- **Global White Background**: Changed from custom off-white to standard `bg-white` and `dark:bg-zinc-950`.
+- **Opaque Navbar**: Removed glass effect (`backdrop-blur`) in favor of solid colors (`bg-white` / `dark:bg-zinc-900`) for a cleaner look.
+- **Dropdown Arrows**: Added Material Symbols `expand_more` icon to all `<select>` inputs in Signup and Profile pages.
+- **Main Copy**: Updated landing page text to "간단한 회원가입 후 바로 무료로 사용하실 수 있어요."
 
 ---
 
-## 2) 글 생성 화면 (/generate)
-사용자 입력:
-- 업종: 카페 또는 미용실
-- 오늘 홍보 내용 한 줄
-- 톤/목적 선택
+## 2. Password Reset Flow
 
-행동:
-- “오늘 인스타 글 바로 완성하기” 클릭
+### Feature
+Complete flow for users to reset forgotten passwords.
 
-성공 기준:
-- 입력이 과하다고 느끼지 않음
-- 5~10초 내 결과 도착
+### Components
+- **`/forgot-password`**:
+  - Takes user email.
+  - Sends Supabase magic link/reset email.
+- **`/reset-password`**:
+  - Secure form to enter new password.
+  - Updates via Supabase `updateUser`.
 
----
+### UX Details
+- Fully styled with existing "Premium/Ivory" design system.
+- Korean localization for all messages.
+- Smooth transitions and loading states.
 
-## 3) 결과 화면 (same page)
-표시:
-- 인스타 캡션
-- 스토리 문구
-- 댓글 유도 질문
-- 해시태그
-- 복사 버튼
-
-행동:
-- “복사해서 바로 사용하기” 클릭
-- 복사 완료 토스트/피드백 확인
-- “이 톤으로 다시 만들기” 클릭 (재생성 확인)
-
-성공 기준:
-- 사용자가 “이대로 올리면 되겠다”라고 느낄 문장
-- 복사 UX가 확실함
+![Password Reset Flow](file:///Users/tuesdaymorning/.gemini/antigravity/brain/36948d86-cc29-449f-aafa-a2f9a0115403/password_reset_verification_1767416540186.webp)
 
 ---
 
-## 4) 무료 제한 테스트 (3회/일)
-시나리오:
-- 같은 visitor_id로 3회 생성 성공
-- 4번째 생성 시도
+## 3. Business Type & Industry Expansion
 
-기대 결과:
-- paywall로 이동 또는 paywall 모달 노출
-- 메시지:
-  “무료 사용 횟수를 모두 사용하셨습니다.”
-  “커피 한 잔 값으로 한 달 내내 인스타 고민 끝”
+### Goal
+Remove friction for users by remembering their industry and supporting more business types.
 
-성공 기준:
-- 사용자가 “막혔다”가 아니라 “다음 단계가 결제구나”로 이해
+### Changes
+1. **New Industry Types**:
+   - **RESTAURANT** (식당/요식업) - Icon: 🍽️
+   - **OTHER** (기타) - Icon: 🏪
+   - Added to `ResourceType` enum and all mapping logic.
 
----
+2. **Auto-Selection in `/generate`**:
+   - Page effectively remembers user's choice from signup/profile.
+   - **Before**: User selected industry manually every time.
+   - **After**: Read-only box shows "프로필에서 설정한 업종입니다" with correct icon.
+   - Implemented by converting Page to Server Component to fetch profile data.
 
-## 5) 결제 흐름 테스트
-행동:
-- paywall에서 “월 5,900원으로 계속 사용하기” 클릭
-- Stripe Checkout 이동
-- 결제 성공 후 /success 이동
+3. **Case Sensitivity Fix**:
+   - Fixed issue where `caps` DB values didn't match `lowercase` code values.
+   - Added robust normalization (`toUpperCase()`) to industry mapping.
 
-Webhook:
-- subscription status가 active로 기록됨
-- 동일 visitor_id 제한 해제
-
-성공 기준:
-- 결제 후 바로 생성 가능
-- 재접속해도 구독 상태 유지
+4. **React 19 Compatibility**:
+   - Updated `ProfileForm` to use `useActionState` instead of deprecated `useFormState`.
 
 ---
 
-## 6) 실제 사용자 테스트 질문 (5명에게 공통)
-1) “이거 지금 바로 인스타에 붙여넣을 수 있겠어요?”
-2) “ChatGPT 대신 이걸 쓰게 되는 이유가 뭐예요?”
-3) “월 5,900원은 어떤 느낌이에요? (싸다/괜찮다/비싸다)”
-4) “지금 가장 불편하거나 불안한 부분이 있었나요?”
-5) “이 서비스가 계속 쓰이려면 뭐가 하나 더 필요할까요?”
+## Verification Status
 
----
-
-## 테스트 성공 판정
-- 5명 중 3명 이상이 “편하다/쓸만하다” 반응
-- 1명이라도 결제 의사 표현 또는 실제 결제 발생
-- 결제 안 해도 “왜 안 하는지” 이유가 명확히 모인다
+| Feature | Light Mode | Dark Mode | logic |
+|:---|:---:|:---:|:---:|
+| **Theme/Navbar** | ✅ Clean White | ✅ Deep Zinc | N/A |
+| **Password Reset** | ✅ | ✅ | ✅ Email sent/PW updated |
+| **Industry Auto-Select** | ✅ | ✅ | ✅ Fetches from DB |
+| **New Icons (Rest./Other)** | ✅ | ✅ | ✅ Displays correctly |

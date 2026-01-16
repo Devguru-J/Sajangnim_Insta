@@ -28,7 +28,7 @@ export default function SignupPage({
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-background-light dark:bg-neutral-900 px-4 py-12">
+        <div className="min-h-screen flex items-center justify-center  px-4 py-12">
             <div className="w-full max-w-xl space-y-8 bg-white dark:bg-neutral-800 p-8 rounded-2xl shadow-xl border border-gray-100 dark:border-white/5">
                 <div className="text-center">
                     <h2 className="text-3xl font-black text-text-main dark:text-white mb-2">
@@ -53,13 +53,18 @@ export default function SignupPage({
 
                     <div>
                         <label className="block text-sm font-bold text-text-main dark:text-gray-200 mb-2">업종</label>
-                        <select name="industry" required className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-neutral-900 text-text-main dark:text-white outline-none focus:ring-2 focus:ring-primary appearance-none">
-                            <option value="">선택해주세요</option>
-                            <option value="cafe">카페/베이커리</option>
-                            <option value="salon">미용실/뷰티</option>
-                            <option value="restaurant">식당/요식업</option>
-                            <option value="other">기타</option>
-                        </select>
+                        <div className="relative">
+                            <select name="industry" required className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-neutral-900 text-text-main dark:text-white outline-none focus:ring-2 focus:ring-primary appearance-none pr-10">
+                                <option value="">선택해주세요</option>
+                                <option value="cafe">카페/베이커리</option>
+                                <option value="salon">미용실/뷰티</option>
+                                <option value="restaurant">식당/요식업</option>
+                                <option value="other">기타</option>
+                            </select>
+                            <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none">
+                                expand_more
+                            </span>
+                        </div>
                     </div>
 
                     <div>

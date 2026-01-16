@@ -4,7 +4,7 @@ import React from 'react';
 export default function SuccessPage() {
     return (
         <div className="min-h-[80vh] flex items-center justify-center p-4 animate-fade-in">
-            <div className="w-full max-w-[500px] text-center bg-white dark:bg-surface-dark rounded-3xl p-10 shadow-xl border border-blue-100 dark:border-white/10">
+            <div className="w-full max-w-[500px] text-center bg-white dark:bg-zinc-900 rounded-3xl p-10 shadow-xl border border-blue-100 dark:border-white/10">
                 <div className="size-20 bg-blue-50 rounded-full flex items-center justify-center text-blue-500 mx-auto mb-6">
                     <span className="material-symbols-outlined text-4xl">celebration</span>
                 </div>

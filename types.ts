@@ -2,7 +2,8 @@
 export enum BusinessType {
     CAFE = 'CAFE',
     SALON = 'SALON',
-    RESTAURANT = 'RESTAURANT'
+    RESTAURANT = 'RESTAURANT',
+    OTHER = 'OTHER'
 }
 
 export enum Tone {

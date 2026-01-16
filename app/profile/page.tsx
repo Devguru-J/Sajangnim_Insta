@@ -1,6 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
-import { updateProfile } from "./actions";
+import { updateProfile, getSubscriptionStatus } from "./actions";
 import ProfileForm from "@/components/ProfileForm";
 
 export default async function ProfilePage({
@@ -21,11 +21,13 @@ export default async function ProfilePage({
         .eq("id", user.id)
         .single();
 
+    const subscriptionStatus = await getSubscriptionStatus();
+
     const params = await searchParams;
     const message = params.message;
 
     return (
-        <div className="min-h-screen bg-background-light dark:bg-neutral-900 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="min-h-screen  py-12 px-4 sm:px-6 lg:px-8">
             <div className="max-w-3xl mx-auto">
                 <div className="bg-white dark:bg-neutral-800 shadow-xl rounded-2xl border border-gray-100 dark:border-white/5">
                     <div className="px-8 py-6 border-b border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-neutral-800/50">
@@ -42,7 +44,12 @@ export default async function ProfilePage({
                             </div>
                         )}
 
-                        <ProfileForm profile={profile} userEmail={user.email || ''} />
+                        <ProfileForm
+                            profile={profile}
+                            userEmail={user.email || ''}
+                            userId={user.id}
+                            subscriptionStatus={subscriptionStatus}
+                        />
                     </div>
                 </div>
             </div>

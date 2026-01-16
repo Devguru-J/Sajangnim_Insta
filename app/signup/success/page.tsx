@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export default function SignupSuccessPage() {
     return (
-        <div className="min-h-screen flex items-center justify-center bg-background-light dark:bg-neutral-900 px-4">
+        <div className="min-h-screen flex items-center justify-center  px-4">
             <div className="w-full max-w-md bg-white dark:bg-neutral-800 p-8 rounded-2xl shadow-xl border border-gray-100 dark:border-white/5 text-center">
                 <div className="mb-6 flex justify-center">
                     <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center text-primary">

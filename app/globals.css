@@ -1,16 +1,19 @@
 @import "tailwindcss";
 
+/* Enable class-based dark mode */
+@variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  
+
   --color-primary: #FF6B00;
   --color-primary-hover: #E65A00;
-  
+
   --color-background-light: #F9FAFB;
   --color-background-dark: #0A0A0A;
   --color-surface-dark: #1F1F1F;
-  
+
   --color-text-main: #111827;
   --color-text-sub: #6B7280;
 
@@ -18,12 +21,25 @@
   --animate-fade-in-up: fade-in-up 0.5s ease-out;
 
   @keyframes fade-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
   }
+
   @keyframes fade-in-up {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 }
 
@@ -44,4 +60,3 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
-

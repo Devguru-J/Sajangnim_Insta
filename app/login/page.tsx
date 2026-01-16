@@ -19,7 +19,7 @@ export default async function LoginPage({
     const message = params.message;
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-background-light dark:bg-neutral-900 px-4">
+        <div className="min-h-screen flex items-center justify-center  px-4">
             <div className="w-full max-w-md space-y-8 bg-white dark:bg-neutral-800 p-8 rounded-2xl shadow-xl border border-gray-100 dark:border-white/5">
                 <div className="text-center">
                     <h2 className="text-3xl font-black text-text-main dark:text-white mb-2">
