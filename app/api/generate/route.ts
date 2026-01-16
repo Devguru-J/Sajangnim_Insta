@@ -7,7 +7,7 @@ import { BusinessType, Tone, Purpose } from '@/types';
 import { buildSystemPrompt, buildUserPrompt } from './prompts';
 
 const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
+    apiKey: process.env.OPENAI_API_KEY || '',
 });
 
 export async function POST(request: Request) {
