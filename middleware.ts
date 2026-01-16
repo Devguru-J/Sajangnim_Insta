@@ -5,39 +5,40 @@ import { v4 as uuidv4 } from 'uuid';
 import { updateSession } from '@/utils/supabase/middleware';
 
 export async function middleware(request: NextRequest) {
-    // 1. Refresh Supabase session
-    const response = await updateSession(request);
+    try {
+        // 1. Refresh Supabase session
+        const response = await updateSession(request);
 
-    // 2. Existing Visitor ID logic
-    const visitorId = request.cookies.get('visitor_id')?.value;
+        // 2. Existing Visitor ID logic
+        const visitorId = request.cookies.get('visitor_id')?.value;
 
-    if (!visitorId) {
-        const newVisitorId = uuidv4();
-        response.cookies.set('visitor_id', newVisitorId, {
-            httpOnly: true,
-            path: '/',
-            maxAge: 60 * 60 * 24 * 365, // 1 year
-            sameSite: 'lax'
-        });
+        if (!visitorId) {
+            const newVisitorId = uuidv4();
+            response.cookies.set('visitor_id', newVisitorId, {
+                httpOnly: true,
+                path: '/',
+                maxAge: 60 * 60 * 24 * 365, // 1 year
+                sameSite: 'lax'
+            });
+        }
+
+        return response;
+    } catch (error) {
+        // If middleware fails, let the request through
+        console.error('Middleware error:', error);
+        return NextResponse.next();
     }
-
-    return response;
 }
 
 export const config = {
     matcher: [
         /*
-         * Match all request paths except for the ones starting with:
-         * - api (API routes) -> actually we WANT to match API to ensure consistency, 
-         *   but usually middleware runs before API.
-         *   Wait, if we generate it in middleware, API will receive it in request? 
-         *   Middleware runs before request reaches API.
-         *   BUT Next.js middleware modifying request cookies/headers is passed to Server Components/API?
-         *   Yes.
+         * Match all request paths except:
          * - _next/static (static files)
          * - _next/image (image optimization files)
          * - favicon.ico (favicon file)
+         * - Server Actions (POST requests to same URL)
          */
-        '/((?!_next/static|_next/image|favicon.ico).*)',
+        '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
     ],
 };
