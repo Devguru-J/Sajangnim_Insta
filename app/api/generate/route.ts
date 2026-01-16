@@ -6,11 +6,14 @@ import { v4 as uuidv4 } from 'uuid';
 import { BusinessType, Tone, Purpose } from '@/types';
 import { buildSystemPrompt, buildUserPrompt } from './prompts';
 
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY || '',
-});
+function getOpenAI() {
+    return new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY!,
+    });
+}
 
 export async function POST(request: Request) {
+    const openai = getOpenAI();
     try {
         const body = await request.json();
         const { businessType, content, tone, purpose } = body;
