@@ -46,7 +46,7 @@ export async function POST(req: Request) {
                 // For MVP, checkout session completed sets it active.
                 // You might want to update current_period_end here.
                 const invoice = event.data.object as Stripe.Invoice;
-                const subscriptionId = invoice.subscription as string;
+                const subscriptionId = (invoice as any).subscription as string;
                 // Find visitor by subscriptionId and update
                 break;
             }

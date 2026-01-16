@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ results: { common: { errorCode: "-1", errorMessage: "Keyword is required" }, juso: [] } }, { status: 400 });
     }
 
-    const apiKey = "U01TX0FVVEgyMDI1MTExMDEwMTk1MzExNjQyMzI=";
+    const apiKey = process.env.JUSO_API_KEY || "";
     const apiUrl = "https://business.juso.go.kr/addrlink/addrLinkApi.do";
 
     try {
