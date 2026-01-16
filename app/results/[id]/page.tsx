@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import ResultsView from '@/components/ResultsView';
 import { GeneratedPost } from '@/types';
 import { notFound } from 'next/navigation';
@@ -15,6 +15,7 @@ export const metadata: Metadata = {
 export default async function ResultsPage({ params }: Props) {
     const { id } = await params;
 
+    const supabaseAdmin = getSupabaseAdmin();
     const { data, error } = await supabaseAdmin
         .from('generations')
         .select('*')

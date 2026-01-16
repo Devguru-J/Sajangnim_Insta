@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { supabase } from '@/lib/supabaseClient';
+import { getSupabase } from '@/lib/supabaseClient';
 import { cookies } from 'next/headers';
 import { v4 as uuidv4 } from 'uuid';
 import { BusinessType, Tone, Purpose } from '@/types';
@@ -14,6 +14,7 @@ function getOpenAI() {
 
 export async function POST(request: Request) {
     const openai = getOpenAI();
+    const supabase = getSupabase();
     try {
         const body = await request.json();
         const { businessType, content, tone, purpose } = body;

@@ -1,6 +1,6 @@
 import React from 'react';
 import { cookies } from 'next/headers';
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import HistoryList from '@/components/HistoryList';
 import { redirect } from 'next/navigation';
 
@@ -11,6 +11,8 @@ export default async function HistoryPage() {
     if (!visitorId) {
         redirect('/login');
     }
+
+    const supabaseAdmin = getSupabaseAdmin();
 
     // Fetch initial data (first 10 items)
     const { data } = await supabaseAdmin

@@ -1,6 +1,6 @@
 'use server'
 
-import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { revalidatePath } from 'next/cache'
 
 export interface FetchGenerationsParams {
@@ -24,6 +24,7 @@ export async function fetchGenerations(params: FetchGenerationsParams) {
         showBookmarked = false
     } = params
 
+    const supabaseAdmin = getSupabaseAdmin()
     let query = supabaseAdmin
         .from('generations')
         .select('*')
@@ -82,6 +83,7 @@ export async function fetchGenerations(params: FetchGenerationsParams) {
 }
 
 export async function toggleBookmark(generationId: string, isBookmarked: boolean) {
+    const supabaseAdmin = getSupabaseAdmin()
     const { error } = await supabaseAdmin
         .from('generations')
         .update({ is_bookmarked: isBookmarked })
@@ -97,6 +99,7 @@ export async function toggleBookmark(generationId: string, isBookmarked: boolean
 }
 
 export async function deleteGeneration(generationId: string) {
+    const supabaseAdmin = getSupabaseAdmin()
     const { error } = await supabaseAdmin
         .from('generations')
         .delete()
