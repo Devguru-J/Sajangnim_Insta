@@ -13,6 +13,7 @@ type Bindings = {
     STRIPE_SECRET_KEY: string;
     STRIPE_WEBHOOK_SECRET: string;
     JUSO_API_KEY: string;
+    ADMIN_EMAIL: string;
 };
 
 const app = new Hono<{ Bindings: Bindings }>().basePath('/api');
@@ -98,7 +99,9 @@ app.post('/generate', async (c) => {
             .eq('visitor_id', user.id)
             .single();
 
-        const isPremium = subscription?.status === 'active';
+        // Admin accounts always have premium access
+        const isAdmin = user.email === c.env.ADMIN_EMAIL;
+        const isPremium = isAdmin || subscription?.status === 'active';
 
         if (!isPremium) {
             // Count today's generations
@@ -408,7 +411,9 @@ app.get('/subscription/status', async (c) => {
         .eq('visitor_id', user.id)
         .single();
 
-    const isPremium = subscription?.status === 'active';
+    // Admin accounts always have premium access
+    const isAdmin = user.email === c.env.ADMIN_EMAIL;
+    const isPremium = isAdmin || subscription?.status === 'active';
 
     // Count today's generations
     const { count } = await supabaseAdmin
@@ -419,6 +424,7 @@ app.get('/subscription/status', async (c) => {
 
     return c.json({
         plan: isPremium ? 'premium' : 'free',
+        isAdmin,
         generationsToday: count || 0,
         generationsLimit: 3,
         currentPeriodEnd: subscription?.current_period_end,
