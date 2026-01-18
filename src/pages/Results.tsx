@@ -43,10 +43,10 @@ export default function Results() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-text-sub">결과를 불러오는 중...</p>
+          <p className="mt-4 text-zinc-600 dark:text-zinc-400">결과를 불러오는 중...</p>
         </div>
       </div>
     )
@@ -54,11 +54,15 @@ export default function Results() {
 
   if (!post) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-text-sub">결과를 찾을 수 없습니다.</p>
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950">
+        <p className="text-zinc-600 dark:text-zinc-400">결과를 찾을 수 없습니다.</p>
       </div>
     )
   }
 
-  return <ResultsView post={post} />
+  return (
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+      <ResultsView post={post} />
+    </div>
+  )
 }

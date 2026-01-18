@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { supabase } from '@/lib/supabase';
 
 interface ProfileImageUploadProps {
     currentAvatarUrl?: string | null;
@@ -28,11 +29,15 @@ export default function ProfileImageUpload({ currentAvatarUrl, userId }: Profile
 
         setUploading(true);
         try {
+            const { data: { session } } = await supabase.auth.getSession();
             const formData = new FormData();
             formData.append('file', file);
 
             const response = await fetch('/api/profile/avatar', {
                 method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${session?.access_token}`,
+                },
                 body: formData,
             });
 
@@ -59,8 +64,12 @@ export default function ProfileImageUpload({ currentAvatarUrl, userId }: Profile
 
         setUploading(true);
         try {
+            const { data: { session } } = await supabase.auth.getSession();
             const response = await fetch('/api/profile/avatar', {
                 method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${session?.access_token}`,
+                },
             });
 
             const result = await response.json();

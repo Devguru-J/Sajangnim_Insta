@@ -27,9 +27,9 @@ export default function FAQ() {
   const [openIndex, setOpenIndex] = useState<number | null>(null)
 
   return (
-    <div className="min-h-screen py-12 px-4">
+    <div className="min-h-screen py-12 px-4 bg-zinc-50 dark:bg-zinc-950">
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-3xl font-black text-text-main dark:text-white mb-8 text-center">
+        <h1 className="text-3xl font-black text-zinc-900 dark:text-white mb-8 text-center">
           자주 묻는 질문
         </h1>
 
@@ -37,19 +37,19 @@ export default function FAQ() {
           {faqs.map((faq, index) => (
             <div
               key={index}
-              className="bg-white dark:bg-neutral-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+              className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden"
             >
               <button
                 onClick={() => setOpenIndex(openIndex === index ? null : index)}
-                className="w-full px-6 py-4 text-left flex justify-between items-center"
+                className="w-full px-6 py-4 text-left flex justify-between items-center cursor-pointer"
               >
-                <span className="font-bold text-text-main dark:text-white">{faq.question}</span>
-                <span className="text-2xl text-text-sub">
+                <span className="font-bold text-zinc-900 dark:text-white">{faq.question}</span>
+                <span className="text-2xl text-zinc-500 dark:text-zinc-400">
                   {openIndex === index ? "−" : "+"}
                 </span>
               </button>
               {openIndex === index && (
-                <div className="px-6 pb-4 text-text-sub">
+                <div className="px-6 pb-4 text-zinc-600 dark:text-zinc-400">
                   {faq.answer}
                 </div>
               )}

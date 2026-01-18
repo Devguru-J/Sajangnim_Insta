@@ -47,32 +47,32 @@ export default function Signup() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md space-y-8 bg-white dark:bg-neutral-800 p-8 rounded-2xl shadow-xl border border-gray-100 dark:border-white/5">
+    <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-zinc-50 dark:bg-zinc-950">
+      <div className="w-full max-w-md space-y-8 bg-white dark:bg-zinc-900 p-8 rounded-2xl shadow-xl border border-zinc-200 dark:border-zinc-800">
         <div className="text-center">
-          <h2 className="text-3xl font-black text-text-main dark:text-white mb-2">
+          <h2 className="text-3xl font-black text-zinc-900 dark:text-white mb-2">
             회원가입
           </h2>
-          <p className="text-text-sub dark:text-gray-400">
+          <p className="text-zinc-600 dark:text-zinc-400">
             사장님의 인스타 마케팅 파트너가 되어드릴게요.
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-bold text-text-main dark:text-gray-200 mb-2">이메일 *</label>
+            <label className="block text-sm font-bold text-zinc-900 dark:text-zinc-200 mb-2">이메일 *</label>
             <input
               name="email"
               type="email"
               value={formData.email}
               onChange={handleChange}
               required
-              className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-neutral-900 text-text-main dark:text-white focus:ring-2 focus:ring-primary outline-none"
+              className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
               placeholder="hellosajang@example.com"
             />
           </div>
           <div>
-            <label className="block text-sm font-bold text-text-main dark:text-gray-200 mb-2">비밀번호 *</label>
+            <label className="block text-sm font-bold text-zinc-900 dark:text-zinc-200 mb-2">비밀번호 *</label>
             <input
               name="password"
               type="password"
@@ -80,29 +80,29 @@ export default function Signup() {
               onChange={handleChange}
               required
               minLength={6}
-              className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-neutral-900 text-text-main dark:text-white focus:ring-2 focus:ring-primary outline-none"
+              className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
               placeholder="6자 이상"
             />
           </div>
           <div>
-            <label className="block text-sm font-bold text-text-main dark:text-gray-200 mb-2">이름 *</label>
+            <label className="block text-sm font-bold text-zinc-900 dark:text-zinc-200 mb-2">이름 *</label>
             <input
               name="name"
               type="text"
               value={formData.name}
               onChange={handleChange}
               required
-              className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-neutral-900 text-text-main dark:text-white focus:ring-2 focus:ring-primary outline-none"
+              className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
               placeholder="홍길동"
             />
           </div>
           <div>
-            <label className="block text-sm font-bold text-text-main dark:text-gray-200 mb-2">업종</label>
+            <label className="block text-sm font-bold text-zinc-900 dark:text-zinc-200 mb-2">업종</label>
             <select
               name="industry"
               value={formData.industry}
               onChange={handleChange}
-              className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-neutral-900 text-text-main dark:text-white focus:ring-2 focus:ring-primary outline-none"
+              className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
             >
               <option value="">선택해주세요</option>
               <option value="CAFE">카페</option>
@@ -113,19 +113,19 @@ export default function Signup() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-bold text-text-main dark:text-gray-200 mb-2">매장명</label>
+            <label className="block text-sm font-bold text-zinc-900 dark:text-zinc-200 mb-2">매장명</label>
             <input
               name="store_name"
               type="text"
               value={formData.store_name}
               onChange={handleChange}
-              className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-neutral-900 text-text-main dark:text-white focus:ring-2 focus:ring-primary outline-none"
+              className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
               placeholder="우리가게"
             />
           </div>
 
           {error && (
-            <div className="p-3 rounded-lg bg-red-50 text-red-600 text-sm font-medium text-center">
+            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm font-medium text-center">
               {error}
             </div>
           )}
@@ -133,14 +133,14 @@ export default function Signup() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full flex justify-center py-3.5 px-4 rounded-xl shadow-lg text-lg font-bold text-white bg-primary hover:bg-primary-hover transition-colors disabled:opacity-50"
+            className="w-full flex justify-center py-3.5 px-4 rounded-xl shadow-lg text-lg font-bold text-white bg-primary hover:bg-primary-hover transition-colors disabled:opacity-50 cursor-pointer"
           >
             {loading ? "가입 중..." : "회원가입"}
           </button>
         </form>
 
         <div className="text-center">
-          <p className="text-text-sub dark:text-gray-400">
+          <p className="text-zinc-600 dark:text-zinc-400">
             이미 계정이 있으신가요?{" "}
             <Link to="/login" className="font-bold text-primary hover:text-primary-hover">
               로그인

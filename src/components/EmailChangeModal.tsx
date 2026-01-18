@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { supabase } from '@/lib/supabase';
 
 interface EmailChangeModalProps {
     currentEmail: string;
@@ -28,9 +29,13 @@ export default function EmailChangeModal({ currentEmail, onClose }: EmailChangeM
         setMessage(null);
 
         try {
+            const { data: { session } } = await supabase.auth.getSession();
             const response = await fetch('/api/profile/email', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session?.access_token}`,
+                },
                 body: JSON.stringify({ newEmail, password }),
             });
 

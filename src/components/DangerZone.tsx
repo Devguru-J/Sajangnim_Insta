@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/lib/supabase';
 
 export default function DangerZone() {
     const navigate = useNavigate();
@@ -19,9 +20,13 @@ export default function DangerZone() {
 
         setDeleting(true);
         try {
+            const { data: { session } } = await supabase.auth.getSession();
             const response = await fetch('/api/profile/delete', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session?.access_token}`,
+                },
                 body: JSON.stringify({ confirmText }),
             });
 

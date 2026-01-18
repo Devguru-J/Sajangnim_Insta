@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { handle } from 'hono/cloudflare-pages';
 import { cors } from 'hono/cors';
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
@@ -94,7 +95,7 @@ app.post('/generate', async (c) => {
         const { data: subscription } = await supabaseAdmin
             .from('subscriptions')
             .select('*')
-            .eq('user_id', user.id)
+            .eq('visitor_id', user.id)
             .single();
 
         const isPremium = subscription?.status === 'active';
@@ -104,7 +105,7 @@ app.post('/generate', async (c) => {
             const { count } = await supabaseAdmin
                 .from('generations')
                 .select('*', { count: 'exact', head: true })
-                .eq('user_id', user.id)
+                .eq('visitor_id', user.id)
                 .gte('created_at', `${today}T00:00:00.000Z`);
 
             if ((count || 0) >= 3) {
@@ -142,8 +143,10 @@ Return JSON with these fields:
         const { data: generation, error: insertError } = await supabaseAdmin
             .from('generations')
             .insert({
-                user_id: user.id,
+                visitor_id: user.id,
                 industry: businessType,
+                tone: tone,
+                goal: purpose,
                 input_text: content,
                 result_json: result,
             })
@@ -215,7 +218,7 @@ app.get('/history', async (c) => {
     let query = supabase
         .from('generations')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('visitor_id', user.id)
         .order('created_at', { ascending: false });
 
     if (searchQuery) {
@@ -274,7 +277,7 @@ app.post('/history/bookmark', async (c) => {
         .from('generations')
         .update({ is_bookmarked: isBookmarked })
         .eq('id', id)
-        .eq('user_id', user.id);
+        .eq('visitor_id', user.id);
 
     if (error) {
         return c.json({ success: false, error: 'Failed to update' }, 500);
@@ -304,7 +307,7 @@ app.post('/history/delete', async (c) => {
         .from('generations')
         .delete()
         .eq('id', id)
-        .eq('user_id', user.id);
+        .eq('visitor_id', user.id);
 
     if (error) {
         return c.json({ success: false, error: 'Failed to delete' }, 500);
@@ -380,6 +383,49 @@ app.delete('/profile/avatar', async (c) => {
     return c.json({ success: true });
 });
 
+// Subscription status endpoint
+app.get('/subscription/status', async (c) => {
+    const authHeader = c.req.header('Authorization');
+    if (!authHeader) {
+        return c.json({ error: 'Unauthorized' }, 401);
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const supabase = getSupabase(c.env);
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+        return c.json({ error: 'Unauthorized' }, 401);
+    }
+
+    const supabaseAdmin = getSupabaseAdmin(c.env);
+    const today = new Date().toISOString().split('T')[0];
+
+    // Get subscription
+    const { data: subscription } = await supabaseAdmin
+        .from('subscriptions')
+        .select('*')
+        .eq('visitor_id', user.id)
+        .single();
+
+    const isPremium = subscription?.status === 'active';
+
+    // Count today's generations
+    const { count } = await supabaseAdmin
+        .from('generations')
+        .select('*', { count: 'exact', head: true })
+        .eq('visitor_id', user.id)
+        .gte('created_at', `${today}T00:00:00.000Z`);
+
+    return c.json({
+        plan: isPremium ? 'premium' : 'free',
+        generationsToday: count || 0,
+        generationsLimit: 3,
+        currentPeriodEnd: subscription?.current_period_end,
+        status: subscription?.status,
+    });
+});
+
 app.post('/profile/email', async (c) => {
     const authHeader = c.req.header('Authorization');
     if (!authHeader) {
@@ -422,9 +468,9 @@ app.post('/profile/delete', async (c) => {
     const supabaseAdmin = getSupabaseAdmin(c.env);
 
     // Delete user data
-    await supabaseAdmin.from('generations').delete().eq('user_id', user.id);
+    await supabaseAdmin.from('generations').delete().eq('visitor_id', user.id);
     await supabaseAdmin.from('profiles').delete().eq('id', user.id);
-    await supabaseAdmin.from('subscriptions').delete().eq('user_id', user.id);
+    await supabaseAdmin.from('subscriptions').delete().eq('visitor_id', user.id);
 
     // Delete auth user
     await supabaseAdmin.auth.admin.deleteUser(user.id);
@@ -461,7 +507,7 @@ app.post('/stripe/webhook', async (c) => {
                     await supabaseAdmin
                         .from('subscriptions')
                         .upsert({
-                            user_id: userId,
+                            visitor_id: userId,
                             stripe_subscription_id: subscriptionId,
                             status: 'active',
                         });
@@ -532,4 +578,5 @@ app.post('/stripe/checkout', async (c) => {
     return c.json({ url: session.url });
 });
 
-export default app;
+// For Cloudflare Pages Functions
+export const onRequest = handle(app);

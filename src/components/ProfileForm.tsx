@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { supabase } from '@/lib/supabase';
 import AddressSearch from "@/components/AddressSearch";
 import ProfileImageUpload from "@/components/ProfileImageUpload";
 import SubscriptionCard from "@/components/SubscriptionCard";
@@ -49,9 +50,13 @@ export default function ProfileForm({ profile, userEmail, userId, subscriptionSt
         };
 
         try {
+            const { data: { session } } = await supabase.auth.getSession();
             const response = await fetch('/api/profile', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session?.access_token}`,
+                },
                 body: JSON.stringify(data),
             });
 

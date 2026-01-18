@@ -1,19 +1,48 @@
+import { useEffect, useState } from "react"
+import { useNavigate } from "react-router-dom"
+import { supabase } from "@/lib/supabase"
 import GenerateForm from "@/components/GenerateForm"
 
 export default function Generate() {
-  return (
-    <div className="min-h-screen py-12 px-4">
-      <div className="max-w-2xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-black text-text-main dark:text-white mb-2">
-            오늘의 인스타 글 만들기
-          </h1>
-          <p className="text-text-sub dark:text-gray-400">
-            몇 가지 정보만 입력하면 AI가 맞춤 글을 작성해드려요.
-          </p>
-        </div>
-        <GenerateForm />
+  const [userIndustry, setUserIndustry] = useState<string | undefined>()
+  const [loading, setLoading] = useState(true)
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    async function fetchUserProfile() {
+      const { data: { session } } = await supabase.auth.getSession()
+
+      if (!session?.user) {
+        navigate("/login")
+        return
+      }
+
+      // Get industry from profile or user metadata
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("industry")
+        .eq("id", session.user.id)
+        .single()
+
+      const industry = profile?.industry || session.user.user_metadata?.industry
+      setUserIndustry(industry)
+      setLoading(false)
+    }
+
+    fetchUserProfile()
+  }, [navigate])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+      <GenerateForm userIndustry={userIndustry} />
     </div>
   )
 }

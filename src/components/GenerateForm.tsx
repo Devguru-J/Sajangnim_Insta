@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BusinessType, Tone, Purpose } from '@/types';
+import { supabase } from '@/lib/supabase';
 
 interface GenerateFormProps {
     userIndustry?: string;
@@ -35,10 +36,19 @@ export default function GenerateForm({ userIndustry }: GenerateFormProps) {
 
         setLoading(true);
         try {
+            // Get auth token
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+                alert("로그인이 필요합니다.");
+                navigate('/login');
+                return;
+            }
+
             const response = await fetch('/api/generate', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`,
                 },
                 body: JSON.stringify({
                     businessType,

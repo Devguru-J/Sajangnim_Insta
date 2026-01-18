@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { api } from '@/lib/api';
 import HistoryFilters from './HistoryFilters';
 import HistoryItem from './HistoryItem';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -30,7 +31,6 @@ export default function HistoryList({ initialData, visitorId }: HistoryListProps
 
         try {
             const params = new URLSearchParams({
-                visitorId,
                 page: String(currentPage),
                 searchQuery: debouncedSearch,
                 industryFilter,
@@ -38,8 +38,7 @@ export default function HistoryList({ initialData, visitorId }: HistoryListProps
                 showBookmarked: String(showBookmarked),
             });
 
-            const response = await fetch(`/api/history?${params.toString()}`);
-            const result = await response.json();
+            const result = await api.getHistory(params);
 
             if (resetPage) {
                 setItems(result.data || []);
@@ -54,7 +53,7 @@ export default function HistoryList({ initialData, visitorId }: HistoryListProps
         } finally {
             setLoading(false);
         }
-    }, [visitorId, debouncedSearch, industryFilter, dateFilter, showBookmarked, page]);
+    }, [debouncedSearch, industryFilter, dateFilter, showBookmarked, page]);
 
     // Reload when filters change
     useEffect(() => {
@@ -73,13 +72,7 @@ export default function HistoryList({ initialData, visitorId }: HistoryListProps
         ));
 
         try {
-            const response = await fetch('/api/history/bookmark', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id, isBookmarked }),
-            });
-
-            const result = await response.json();
+            const result = await api.toggleBookmark(id, isBookmarked);
             if (!result.success) {
                 // Revert on error
                 setItems(items.map(item =>
@@ -98,13 +91,7 @@ export default function HistoryList({ initialData, visitorId }: HistoryListProps
 
     const handleDelete = async (id: string) => {
         try {
-            const response = await fetch('/api/history/delete', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id }),
-            });
-
-            const result = await response.json();
+            const result = await api.deleteHistory(id);
             if (result.success) {
                 setItems(items.filter(item => item.id !== id));
             } else {
