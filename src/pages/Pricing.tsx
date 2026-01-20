@@ -47,7 +47,7 @@ export default function Pricing() {
               인기
             </div>
             <h3 className="text-xl font-bold mb-2">프로</h3>
-            <div className="text-4xl font-black mb-4">₩9,900<span className="text-lg font-normal">/월</span></div>
+            <div className="text-4xl font-black mb-4">₩3,000<span className="text-lg font-normal">/월</span></div>
             <ul className="space-y-3 mb-8">
               <li className="flex items-center gap-2">
                 <span>✓</span> 무제한 생성
