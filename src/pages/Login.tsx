@@ -35,7 +35,7 @@ export default function Login() {
       <div className="w-full max-w-md space-y-8 bg-white dark:bg-zinc-900 p-8 rounded-2xl shadow-xl border border-zinc-200 dark:border-zinc-800">
         <div className="text-center">
           <h2 className="text-3xl font-black text-zinc-900 dark:text-white mb-2">
-            사장님, 어서오세요!
+            사장님, 어서옵솨!
           </h2>
           <p className="text-zinc-600 dark:text-zinc-400">
             오늘도 매출 오르는 인스타 글 써드릴게요.
