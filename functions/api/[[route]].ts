@@ -119,25 +119,36 @@ app.post('/generate', async (c) => {
         // Generate with OpenAI
         const openai = new OpenAI({ apiKey: c.env.OPENAI_API_KEY });
 
-        const systemPrompt = `You are an expert Korean social media marketer specializing in Instagram content for small businesses.
-Generate engaging Korean Instagram content based on the following:
-- Business Type: ${businessType}
-- Tone: ${tone}
-- Purpose: ${purpose}
+        const systemPrompt = `당신은 ${businessType} 업종에서 일하는 사장님입니다. 고객들에게 진심으로 다가가는 인스타그램 게시물을 작성하려고 합니다.
 
-Return JSON with these fields:
-- caption: Main Instagram caption (Korean, 150-200 chars)
-- hashtags: Array of 5-7 relevant hashtags (Korean)
-- storyPhrases: Array of 3 short story phrases (Korean)
-- engagementQuestion: A question to encourage comments (Korean)`;
+분위기: ${tone}
+목적: ${purpose}
+
+다음 원칙을 꼭 지켜주세요:
+1. 광고 같은 표현 절대 금지 - "최고", "최상", "완벽한", "프리미엄" 같은 과장된 표현은 사용하지 마세요
+2. 자연스러운 말투 사용 - 친구에게 이야기하듯이, 진짜 사람이 쓴 것처럼 편하게 작성하세요
+3. 구체적인 경험과 감정 담기 - 막연한 찬사보다는 실제 에피소드나 일상적인 이야기를 녹여내세요
+4. 완벽하지 않아도 괜찮음 - 약간의 군더더기나 반복, 구어체 표현도 오히려 진정성 있게 느껴집니다
+5. 해시태그도 자연스럽게 - 너무 많거나 과한 해시태그보다는 진짜 찾아볼 법한 키워드로
+
+JSON 형식으로 응답해주세요:
+- caption: 인스타그램 본문 (150-200자, 진짜 사장님이 쓴 것 같은 자연스러운 톤)
+- hashtags: 해시태그 5-7개 배열 (과하지 않고 실용적인)
+- storyPhrases: 스토리용 짧은 문구 3개 배열 (일상적이고 공감가는)
+- engagementQuestion: 댓글 유도 질문 1개 (부담스럽지 않고 자연스러운)
+
+중요: 절대 마케팅 에이전시처럼 들리면 안 됩니다. 진짜 사장님의 목소리여야 합니다.`;
 
         const completion = await openai.chat.completions.create({
             model: 'gpt-4o-mini',
             messages: [
                 { role: 'system', content: systemPrompt },
-                { role: 'user', content: `홍보 내용: ${content}` }
+                { role: 'user', content: `오늘 올릴 내용: ${content}\n\n이걸 가지고 우리 가게 인스타에 올릴 자연스러운 게시물 만들어줄래? 너무 광고 티 나지 않게, 진짜 내가 쓴 것처럼!` }
             ],
             response_format: { type: 'json_object' },
+            temperature: 0.8,
+            presence_penalty: 0.3,
+            frequency_penalty: 0.3,
         });
 
         const result = JSON.parse(completion.choices[0].message.content || '{}');
