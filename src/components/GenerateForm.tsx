@@ -13,6 +13,9 @@ interface GeneratedPreview {
     hashtags: string[];
 }
 
+const formatDeviceTime = (date: Date): string =>
+    new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date);
+
 export default function GenerateForm({ userIndustry }: GenerateFormProps) {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
@@ -37,18 +40,25 @@ export default function GenerateForm({ userIndustry }: GenerateFormProps) {
     const [inventoryStatus, setInventoryStatus] = useState('');
     const [customerReaction, setCustomerReaction] = useState('');
     const [preview, setPreview] = useState<GeneratedPreview | null>(null);
-    const [deviceTime, setDeviceTime] = useState(() =>
-        new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date())
-    );
+    const [deviceTime, setDeviceTime] = useState(() => formatDeviceTime(new Date()));
 
     useEffect(() => {
         const updateTime = () => {
-            setDeviceTime(new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date()));
+            setDeviceTime(formatDeviceTime(new Date()));
         };
 
         updateTime();
-        const timer = window.setInterval(updateTime, 30000);
-        return () => window.clearInterval(timer);
+        const msToNextSecond = 1000 - (Date.now() % 1000);
+        let intervalId = 0;
+        const timeoutId = window.setTimeout(() => {
+            updateTime();
+            intervalId = window.setInterval(updateTime, 1000);
+        }, msToNextSecond);
+
+        return () => {
+            window.clearTimeout(timeoutId);
+            if (intervalId) window.clearInterval(intervalId);
+        };
     }, []);
 
     const handleGenerate = async () => {
