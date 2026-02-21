@@ -1,0 +1,22 @@
+export type Bindings = {
+    SUPABASE_URL: string;
+    SUPABASE_ANON_KEY: string;
+    SUPABASE_SERVICE_ROLE_KEY: string;
+    OPENAI_API_KEY: string;
+    STRIPE_SECRET_KEY: string;
+    STRIPE_WEBHOOK_SECRET: string;
+    JUSO_API_KEY: string;
+    ADMIN_EMAIL: string;
+    SCORE_BASE?: string;
+    SCORE_LENGTH_WEIGHT?: string;
+    SCORE_TONE_WEIGHT?: string;
+    SCORE_KEYWORD_WEIGHT?: string;
+    SCORE_ISSUE_PENALTY?: string;
+    SCORE_EXCLAMATION_PENALTY?: string;
+    SCORE_HASHTAG_PENALTY?: string;
+    SCORE_STORY_PENALTY?: string;
+    SCORE_QUESTION_PENALTY?: string;
+    RAG_SIMILARITY_WEIGHT?: string;
+    RAG_TONE_BONUS?: string;
+    RAG_LIKES_WEIGHT?: string;
+};
