@@ -7,6 +7,12 @@ interface GenerateFormProps {
     userIndustry?: string;
 }
 
+interface GeneratedPreview {
+    id: string;
+    caption: string;
+    hashtags: string[];
+}
+
 export default function GenerateForm({ userIndustry }: GenerateFormProps) {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
@@ -30,6 +36,7 @@ export default function GenerateForm({ userIndustry }: GenerateFormProps) {
     const [weather, setWeather] = useState('');
     const [inventoryStatus, setInventoryStatus] = useState('');
     const [customerReaction, setCustomerReaction] = useState('');
+    const [preview, setPreview] = useState<GeneratedPreview | null>(null);
 
     const handleGenerate = async () => {
         if (!content.trim()) {
@@ -75,7 +82,11 @@ export default function GenerateForm({ userIndustry }: GenerateFormProps) {
             }
 
             const data = await response.json();
-            navigate(`/results/${data.id}`);
+            setPreview({
+                id: data.id,
+                caption: data.caption || '',
+                hashtags: Array.isArray(data.hashtags) ? data.hashtags : [],
+            });
         } catch (error) {
             console.error(error);
             alert("글 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
@@ -186,7 +197,7 @@ export default function GenerateForm({ userIndustry }: GenerateFormProps) {
                             {loading ? (
                                 <>
                                     <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                                    생성 중...
+                                    폰 미리보기 생성 중...
                                 </>
                             ) : (
                                 <>
@@ -195,6 +206,15 @@ export default function GenerateForm({ userIndustry }: GenerateFormProps) {
                                 </>
                             )}
                         </button>
+
+                        {preview && (
+                            <button
+                                onClick={() => navigate(`/results/${preview.id}`)}
+                                className="w-full py-3 rounded-xl border border-primary/30 text-primary font-bold hover:bg-primary/5 transition-colors cursor-pointer"
+                            >
+                                결과 페이지에서 전체 보기
+                            </button>
+                        )}
                     </div>
                 </section>
 
@@ -219,18 +239,44 @@ export default function GenerateForm({ userIndustry }: GenerateFormProps) {
                                 </div>
                             </div>
 
-                            <div className="aspect-square bg-zinc-200 dark:bg-zinc-700 rounded-lg mb-4 flex items-center justify-center text-zinc-400 dark:text-zinc-500">
-                                <span className="material-symbols-outlined text-5xl">image</span>
+                            <div className="aspect-square bg-zinc-200 dark:bg-zinc-700 rounded-lg mb-4 flex items-center justify-center text-zinc-400 dark:text-zinc-500 overflow-hidden">
+                                {loading ? (
+                                    <div className="w-full h-full bg-gradient-to-br from-zinc-100 via-zinc-200 to-zinc-100 dark:from-zinc-700 dark:via-zinc-600 dark:to-zinc-700 animate-pulse"></div>
+                                ) : (
+                                    <span className="material-symbols-outlined text-5xl">image</span>
+                                )}
                             </div>
 
-                            <div className="space-y-2 px-2">
-                                <div className="h-2 w-full bg-zinc-200 dark:bg-zinc-700 rounded"></div>
-                                <div className="h-2 w-full bg-zinc-200 dark:bg-zinc-700 rounded"></div>
-                                <div className="h-2 w-2/3 bg-zinc-200 dark:bg-zinc-700 rounded"></div>
-                            </div>
+                            {preview ? (
+                                <div className="px-2 space-y-3 animate-fade-in">
+                                    <p className="text-sm leading-relaxed text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap">
+                                        {preview.caption}
+                                    </p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {preview.hashtags.slice(0, 6).map((tag, idx) => (
+                                            <span
+                                                key={`${tag}-${idx}`}
+                                                className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary"
+                                            >
+                                                {tag}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-2 px-2">
+                                    <div className="h-2 w-full bg-zinc-200 dark:bg-zinc-700 rounded"></div>
+                                    <div className="h-2 w-full bg-zinc-200 dark:bg-zinc-700 rounded"></div>
+                                    <div className="h-2 w-2/3 bg-zinc-200 dark:bg-zinc-700 rounded"></div>
+                                </div>
+                            )}
 
                             <div className="mt-auto pb-10 text-center text-zinc-500 dark:text-zinc-400 italic text-sm">
-                                입력하신 내용으로 멋진 글이 생성될 예정입니다.
+                                {loading
+                                    ? '지금 실제 포스트 느낌으로 문구를 다듬는 중입니다...'
+                                    : preview
+                                        ? '생성 완료. 아래 버튼으로 전체 결과를 볼 수 있어요.'
+                                        : '입력하신 내용으로 멋진 글이 생성될 예정입니다.'}
                             </div>
                         </div>
                     </div>
