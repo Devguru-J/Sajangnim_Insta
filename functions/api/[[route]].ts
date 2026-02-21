@@ -223,6 +223,33 @@ const getCaptionQualityIssues = (caption: string): string[] => {
     return issues;
 };
 
+const normalizeForComparison = (text: string): string =>
+    text.replace(/\s+/g, ' ').replace(/[.,!?~]/g, '').trim().toLowerCase();
+
+const hasLiteralContextCopy = (caption: string, contexts: string[]): boolean => {
+    const normalizedCaption = normalizeForComparison(caption);
+    for (const ctx of contexts) {
+        const normalizedCtx = normalizeForComparison(ctx);
+        if (!normalizedCtx) continue;
+
+        // 너무 짧은 문맥은 제외하고, 10자 이상 연속 구절이 그대로 들어가면 복붙으로 판단
+        if (normalizedCtx.length >= 10 && normalizedCaption.includes(normalizedCtx)) {
+            return true;
+        }
+
+        // 문맥이 길면 앞/뒤 핵심 절반 구절도 검사
+        if (normalizedCtx.length >= 18) {
+            const half = Math.floor(normalizedCtx.length / 2);
+            const head = normalizedCtx.slice(0, half);
+            const tail = normalizedCtx.slice(half);
+            if ((head.length >= 10 && normalizedCaption.includes(head)) || (tail.length >= 10 && normalizedCaption.includes(tail))) {
+                return true;
+            }
+        }
+    }
+    return false;
+};
+
 const detectToneFromCaption = (caption: string): keyof typeof TONE_GUIDE => {
     const text = caption.toLowerCase();
     const emotionalScore =
@@ -291,7 +318,8 @@ const scoreGeneratedResult = (
     result: GenerationResult,
     sourceText: string,
     tone: string,
-    scoringConfig: ScoringConfig
+    scoringConfig: ScoringConfig,
+    contexts: string[]
 ): { score: number; issues: string[] } => {
     const caption = result.caption.trim();
     const issues = getCaptionQualityIssues(caption);
@@ -312,8 +340,9 @@ const scoreGeneratedResult = (
         (result.storyPhrases.length === 3 ? 0 : scoringConfig.storyPenalty) +
         (result.engagementQuestion ? 0 : scoringConfig.questionPenalty);
     const issuePenalty = issues.length * scoringConfig.issuePenalty;
+    const contextCopyPenalty = hasLiteralContextCopy(caption, contexts) ? 12 : 0;
 
-    const score = scoringConfig.base + lengthScore + toneScore + keywordScore - exclamationPenalty - completenessPenalty - issuePenalty;
+    const score = scoringConfig.base + lengthScore + toneScore + keywordScore - exclamationPenalty - completenessPenalty - issuePenalty - contextCopyPenalty;
     return { score, issues };
 };
 
@@ -381,6 +410,7 @@ app.post('/generate', async (c) => {
         const contextWeather = todayContext?.weather?.trim() || '';
         const contextInventory = todayContext?.inventoryStatus?.trim() || '';
         const contextReaction = todayContext?.customerReaction?.trim() || '';
+        const contextList = [contextWeather, contextInventory, contextReaction].filter(Boolean);
         const contextualInput = [content, contextWeather, contextInventory, contextReaction].filter(Boolean).join('\n');
 
         // RAG: Search for similar captions (업종 + 톤 점수 반영)
@@ -440,6 +470,7 @@ app.post('/generate', async (c) => {
 - 톤 가이드: ${toneGuide}
 - 3~4문장일 때 문장 끝맺음을 다양하게 (예: "~했어요 / ~더라고요 / ~네요" 반복 금지)
 - 최소 1문장은 실제 현장 디테일(주문 반응, 준비 과정, 재고/날씨 중 1개)을 넣기
+- 입력된 "오늘 상황" 문장을 그대로 복사하지 말고 반드시 자연스럽게 의역해서 녹이기
 
 조건: ${businessType} / ${tone} / ${purpose}`;
 
@@ -493,12 +524,16 @@ JSON으로 응답:
         let bestScore = -Infinity;
 
         for (const candidate of candidates) {
-            const { score, issues } = scoreGeneratedResult(candidate, sourceForScoring, tone, scoringConfig);
+            const { score, issues } = scoreGeneratedResult(candidate, sourceForScoring, tone, scoringConfig, contextList);
             if (score > bestScore) {
                 bestScore = score;
                 bestIssues = issues;
                 result = candidate;
             }
+        }
+
+        if (hasLiteralContextCopy(result.caption, contextList)) {
+            bestIssues = Array.from(new Set([...bestIssues, '입력한 오늘 상황 문장을 그대로 복사한 부분이 있다.']));
         }
 
         // 2차 보정: AI스러운 문구가 감지되면 캡션만 자연스럽게 다시 작성
@@ -514,6 +549,7 @@ JSON으로 응답:
 권유형/과장형 광고 문구를 제거한다.
 뻔한 마무리 문장("~것 같아요", "기분이 좋네요")을 줄이고 구어체로 바꾼다.
 문장 끝맺음이 반복되면 서로 다르게 섞는다.
+입력 문장을 그대로 복붙한 표현이 있으면 자연스럽게 의역한다.
 응답은 JSON {"caption":"..."} 으로만 준다.`,
                     },
                     {
