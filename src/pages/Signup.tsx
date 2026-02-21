@@ -9,6 +9,7 @@ export default function Signup() {
     name: "",
     industry: "",
     store_name: "",
+    region: "",
     phone: "",
   })
   const [loading, setLoading] = useState(false)
@@ -33,6 +34,8 @@ export default function Signup() {
           industry: formData.industry,
           store_name: formData.store_name,
           phone: formData.phone,
+          city: formData.region,
+          district: "",
         },
       },
     })
@@ -121,6 +124,47 @@ export default function Signup() {
               onChange={handleChange}
               className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
               placeholder="우리가게"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-zinc-900 dark:text-zinc-200 mb-2">지역 *</label>
+            <select
+              name="region"
+              value={formData.region}
+              onChange={handleChange}
+              required
+              className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
+            >
+              <option value="">선택해주세요</option>
+              <option value="서울">서울</option>
+              <option value="경기">경기</option>
+              <option value="인천">인천</option>
+              <option value="부산">부산</option>
+              <option value="대구">대구</option>
+              <option value="대전">대전</option>
+              <option value="광주">광주</option>
+              <option value="울산">울산</option>
+              <option value="세종">세종</option>
+              <option value="강원">강원</option>
+              <option value="충북">충북</option>
+              <option value="충남">충남</option>
+              <option value="전북">전북</option>
+              <option value="전남">전남</option>
+              <option value="경북">경북</option>
+              <option value="경남">경남</option>
+              <option value="제주">제주</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-zinc-900 dark:text-zinc-200 mb-2">휴대폰 번호 *</label>
+            <input
+              name="phone"
+              type="tel"
+              value={formData.phone}
+              onChange={handleChange}
+              required
+              className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
+              placeholder="010-1234-5678"
             />
           </div>
 
