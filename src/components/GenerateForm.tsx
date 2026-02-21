@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BusinessType, Tone, Purpose } from '@/types';
 import { supabase } from '@/lib/supabase';
@@ -37,6 +37,19 @@ export default function GenerateForm({ userIndustry }: GenerateFormProps) {
     const [inventoryStatus, setInventoryStatus] = useState('');
     const [customerReaction, setCustomerReaction] = useState('');
     const [preview, setPreview] = useState<GeneratedPreview | null>(null);
+    const [deviceTime, setDeviceTime] = useState(() =>
+        new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date())
+    );
+
+    useEffect(() => {
+        const updateTime = () => {
+            setDeviceTime(new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date()));
+        };
+
+        updateTime();
+        const timer = window.setInterval(updateTime, 30000);
+        return () => window.clearInterval(timer);
+    }, []);
 
     const handleGenerate = async () => {
         if (!content.trim()) {
@@ -222,7 +235,7 @@ export default function GenerateForm({ userIndustry }: GenerateFormProps) {
                     <div className="w-full max-w-[400px] bg-white dark:bg-zinc-900 rounded-[2.5rem] shadow-2xl p-4 border-[8px] border-zinc-900 dark:border-zinc-800 aspect-[9/19.5] relative overflow-hidden">
                         {/* Mock phone status bar */}
                         <div className="flex justify-between items-center px-6 pt-2 mb-4 text-[10px] font-bold text-zinc-900 dark:text-zinc-50">
-                            <span>9:41</span>
+                            <span>{deviceTime}</span>
                             <div className="flex gap-1">
                                 <span className="material-symbols-outlined text-[12px]">signal_cellular_4_bar</span>
                                 <span className="material-symbols-outlined text-[12px]">wifi</span>
