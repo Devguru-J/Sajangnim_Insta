@@ -14,6 +14,18 @@ type Bindings = {
     STRIPE_WEBHOOK_SECRET: string;
     JUSO_API_KEY: string;
     ADMIN_EMAIL: string;
+    SCORE_BASE?: string;
+    SCORE_LENGTH_WEIGHT?: string;
+    SCORE_TONE_WEIGHT?: string;
+    SCORE_KEYWORD_WEIGHT?: string;
+    SCORE_ISSUE_PENALTY?: string;
+    SCORE_EXCLAMATION_PENALTY?: string;
+    SCORE_HASHTAG_PENALTY?: string;
+    SCORE_STORY_PENALTY?: string;
+    SCORE_QUESTION_PENALTY?: string;
+    RAG_SIMILARITY_WEIGHT?: string;
+    RAG_TONE_BONUS?: string;
+    RAG_LIKES_WEIGHT?: string;
 };
 
 const app = new Hono<{ Bindings: Bindings }>().basePath('/api');
@@ -67,11 +79,234 @@ app.get('/juso', async (c) => {
     }
 });
 
-// Generate content
+// Business type to category mapping for RAG
+const BUSINESS_TYPE_TO_CATEGORY: Record<string, string> = {
+    'CAFE': 'cafe',
+    'BAKERY': 'cafe',
+    'RESTAURANT': 'restaurant',
+    'SALON': 'salon',
+    'BEAUTY': 'salon',
+};
+
+const TONE_GUIDE: Record<string, string> = {
+    EMOTIONAL: '감정과 분위기를 담되 오글거리지 않게, 잔잔한 일상 톤',
+    CASUAL: '친한 단골에게 말하듯 편한 말투, 짧고 리듬감 있게',
+    PROFESSIONAL: '차분하고 신뢰감 있는 설명형 말투, 과장 금지',
+};
+
+const AI_LIKE_PATTERNS = [
+    /여러분/g,
+    /고객님/g,
+    /만나보세요/g,
+    /오세요/g,
+    /지금\s*바로/g,
+    /놓치지\s*마세요/g,
+    /특별한/g,
+    /완벽한/g,
+    /최고의/g,
+    /행복/g,
+];
+
+type GenerationResult = {
+    caption: string;
+    hashtags: string[];
+    storyPhrases: string[];
+    engagementQuestion: string;
+};
+
+type CaptionExample = {
+    caption: string;
+    likes: number;
+    similarity: number;
+};
+
+type TodayContext = {
+    weather?: string;
+    inventoryStatus?: string;
+    customerReaction?: string;
+};
+
+type ScoringConfig = {
+    base: number;
+    lengthWeight: number;
+    toneWeight: number;
+    keywordWeight: number;
+    issuePenalty: number;
+    exclamationPenalty: number;
+    hashtagPenalty: number;
+    storyPenalty: number;
+    questionPenalty: number;
+};
+
+type RagConfig = {
+    similarityWeight: number;
+    toneBonus: number;
+    likesWeight: number;
+};
+
+const toNumberWithDefault = (value: string | undefined, fallback: number): number => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const getScoringConfig = (env: Bindings): ScoringConfig => ({
+    base: toNumberWithDefault(env.SCORE_BASE, 40),
+    lengthWeight: toNumberWithDefault(env.SCORE_LENGTH_WEIGHT, 0.45),
+    toneWeight: toNumberWithDefault(env.SCORE_TONE_WEIGHT, 12),
+    keywordWeight: toNumberWithDefault(env.SCORE_KEYWORD_WEIGHT, 4),
+    issuePenalty: toNumberWithDefault(env.SCORE_ISSUE_PENALTY, 16),
+    exclamationPenalty: toNumberWithDefault(env.SCORE_EXCLAMATION_PENALTY, 2),
+    hashtagPenalty: toNumberWithDefault(env.SCORE_HASHTAG_PENALTY, 6),
+    storyPenalty: toNumberWithDefault(env.SCORE_STORY_PENALTY, 4),
+    questionPenalty: toNumberWithDefault(env.SCORE_QUESTION_PENALTY, 4),
+});
+
+const getRagConfig = (env: Bindings): RagConfig => ({
+    similarityWeight: toNumberWithDefault(env.RAG_SIMILARITY_WEIGHT, 0.75),
+    toneBonus: toNumberWithDefault(env.RAG_TONE_BONUS, 0.15),
+    likesWeight: toNumberWithDefault(env.RAG_LIKES_WEIGHT, 0.1),
+});
+
+const parseGeneratedResult = (raw: string | null | undefined): GenerationResult => {
+    try {
+        const parsed = JSON.parse(raw || '{}');
+        return {
+            caption: typeof parsed.caption === 'string' ? parsed.caption.trim() : '',
+            hashtags: Array.isArray(parsed.hashtags) ? parsed.hashtags.filter((v: unknown) => typeof v === 'string').slice(0, 7) : [],
+            storyPhrases: Array.isArray(parsed.storyPhrases) ? parsed.storyPhrases.filter((v: unknown) => typeof v === 'string').slice(0, 3) : [],
+            engagementQuestion: typeof parsed.engagementQuestion === 'string' ? parsed.engagementQuestion.trim() : '',
+        };
+    } catch {
+        return { caption: '', hashtags: [], storyPhrases: [], engagementQuestion: '' };
+    }
+};
+
+const getCaptionQualityIssues = (caption: string): string[] => {
+    const issues: string[] = [];
+    const trimmed = caption.trim();
+
+    if (trimmed.length < 90 || trimmed.length > 180) {
+        issues.push('캡션 길이가 너무 짧거나 길다(권장 100~150자).');
+    }
+
+    const patternHits = AI_LIKE_PATTERNS.reduce((count, regex) => count + ((trimmed.match(regex) || []).length), 0);
+    if (patternHits > 0) {
+        issues.push('광고/AI 느낌 단어가 포함되어 있다.');
+    }
+
+    const exclamationCount = (trimmed.match(/!/g) || []).length;
+    if (exclamationCount >= 3) {
+        issues.push('느낌표 사용이 과하다.');
+    }
+
+    return issues;
+};
+
+const detectToneFromCaption = (caption: string): keyof typeof TONE_GUIDE => {
+    const text = caption.toLowerCase();
+    const emotionalScore =
+        (text.match(/따뜻|포근|설레|기분|감사|행복|분위기|여유|잔잔|소소/g) || []).length +
+        (text.match(/[💛🧡❤️✨🌿☕️]/g) || []).length;
+    const casualScore =
+        (text.match(/진짜|완전|살짝|요즘|오늘은|느낌|ㅋㅋ|ㅎㅎ|굿|찐/g) || []).length +
+        (text.match(/~|!{2,}/g) || []).length;
+    const professionalScore =
+        (text.match(/안내|운영|예약|공지|준비했습니다|제공됩니다|가능합니다|권장드립니다|추천드립니다/g) || []).length +
+        (text.match(/습니다|입니다/g) || []).length;
+
+    if (professionalScore >= casualScore && professionalScore >= emotionalScore) return 'PROFESSIONAL';
+    if (emotionalScore >= casualScore) return 'EMOTIONAL';
+    return 'CASUAL';
+};
+
+const sampleRagCaptionsByTone = (
+    rows: CaptionExample[],
+    tone: string,
+    limit: number,
+    ragConfig: RagConfig
+): string[] => {
+    const normalizedTone = (tone || '').toUpperCase();
+
+    const scored = rows.map((row) => {
+        const detectedTone = detectToneFromCaption(row.caption);
+        const toneBonus = detectedTone === normalizedTone ? ragConfig.toneBonus : 0;
+        const likesScore = Math.min(row.likes || 0, 800) / 800 * ragConfig.likesWeight;
+        const score = (row.similarity || 0) * ragConfig.similarityWeight + likesScore + toneBonus;
+        return { ...row, score };
+    });
+
+    const sorted = scored.sort((a, b) => b.score - a.score);
+    const selected: string[] = [];
+    const seen = new Set<string>();
+
+    for (const row of sorted) {
+        const normalized = row.caption.replace(/\s+/g, ' ').trim().slice(0, 80);
+        if (!normalized || seen.has(normalized)) continue;
+        seen.add(normalized);
+        selected.push(row.caption);
+        if (selected.length >= limit) break;
+    }
+
+    return selected;
+};
+
+const extractKeywords = (text: string): string[] => {
+    const stopwords = new Set([
+        '오늘', '이번', '그리고', '그냥', '진짜', '정말', '너무', '조금', '많이', '에서', '으로', '까지', '이랑', '관련', '안내',
+        'the', 'and', 'for', 'with', 'from', 'this', 'that',
+    ]);
+
+    return Array.from(
+        new Set(
+            text
+                .toLowerCase()
+                .split(/[^0-9a-zA-Z가-힣]+/)
+                .filter((token) => token.length >= 2 && !stopwords.has(token))
+        )
+    ).slice(0, 20);
+};
+
+const scoreGeneratedResult = (
+    result: GenerationResult,
+    sourceText: string,
+    tone: string,
+    scoringConfig: ScoringConfig
+): { score: number; issues: string[] } => {
+    const caption = result.caption.trim();
+    const issues = getCaptionQualityIssues(caption);
+    const normalizedTone = (tone || '').toUpperCase();
+
+    const targetLength = 125;
+    const lengthScore = Math.max(0, 30 - Math.abs(caption.length - targetLength) * scoringConfig.lengthWeight);
+    const toneScore = detectToneFromCaption(caption) === normalizedTone ? scoringConfig.toneWeight : 0;
+
+    const keywords = extractKeywords(sourceText);
+    const captionKeywords = new Set(extractKeywords(caption));
+    const overlapCount = keywords.filter((keyword) => captionKeywords.has(keyword)).length;
+    const keywordScore = Math.min(20, overlapCount * scoringConfig.keywordWeight);
+
+    const exclamationPenalty = Math.max(0, ((caption.match(/!/g) || []).length - 1) * scoringConfig.exclamationPenalty);
+    const completenessPenalty =
+        (result.hashtags.length >= 5 ? 0 : scoringConfig.hashtagPenalty) +
+        (result.storyPhrases.length === 3 ? 0 : scoringConfig.storyPenalty) +
+        (result.engagementQuestion ? 0 : scoringConfig.questionPenalty);
+    const issuePenalty = issues.length * scoringConfig.issuePenalty;
+
+    const score = scoringConfig.base + lengthScore + toneScore + keywordScore - exclamationPenalty - completenessPenalty - issuePenalty;
+    return { score, issues };
+};
+
+// Generate content with RAG
 app.post('/generate', async (c) => {
     try {
         const body = await c.req.json();
-        const { businessType, content, tone, purpose } = body;
+        const { businessType, content, tone, purpose, todayContext } = body as {
+            businessType: string;
+            content: string;
+            tone: string;
+            purpose: string;
+            todayContext?: TodayContext;
+        };
 
         // Get auth header
         const authHeader = c.req.header('Authorization');
@@ -116,67 +351,162 @@ app.post('/generate', async (c) => {
             }
         }
 
+        const scoringConfig = getScoringConfig(c.env);
+        const ragConfig = getRagConfig(c.env);
+
         // Generate with OpenAI
         const openai = new OpenAI({ apiKey: c.env.OPENAI_API_KEY });
 
-        const systemPrompt = `${businessType} 사장입니다. 인스타 올릴 글 쓰는 중.
+        const contextWeather = todayContext?.weather?.trim() || '';
+        const contextInventory = todayContext?.inventoryStatus?.trim() || '';
+        const contextReaction = todayContext?.customerReaction?.trim() || '';
+        const contextualInput = [content, contextWeather, contextInventory, contextReaction].filter(Boolean).join('\n');
 
-분위기: ${tone}
-목적: ${purpose}
+        // RAG: Search for similar captions (업종 + 톤 점수 반영)
+        const category = BUSINESS_TYPE_TO_CATEGORY[businessType.toUpperCase()] || 'cafe';
+        let exampleCaptions: string[] = [];
 
-이렇게 써주세요:
+        try {
+            // Create embedding for user's content + today's context
+            const embeddingResponse = await openai.embeddings.create({
+                model: 'text-embedding-3-small',
+                input: contextualInput || content,
+            });
+            // pgvector requires string format: "[0.1, 0.2, ...]"
+            const queryEmbedding = `[${embeddingResponse.data[0].embedding.join(',')}]`;
 
-1. 자연스럽게, 하지만 재미있게
-   ❌ "겨울에 잘 어울리는 딸기라떼 만들어봤어. 따뜻하고 달콤하니 기분 좋아짐." → 너무 무미건조, 성의없어 보임
-   ✅ "딸기 떨이로 싸게 사입해서 라떼 만들어봤는데 생각보다 괜찮네 ㅋㅋ 겨울엔 따뜻한게 진리긴 함"
+            // Search similar captions using Supabase function
+            const { data: similarCaptions } = await supabaseAdmin.rpc('match_captions', {
+                query_embedding: queryEmbedding,
+                match_category: category,
+                match_count: 9,
+            });
 
-   - 적당한 디테일이나 뒷얘기 넣기 (어떻게 만들게 됐는지, 왜 이걸 했는지 등)
-   - 너무 정제되지 않은, 약간의 잡담 느낌
-   - 문장이 너무 짧으면 건조함. 적당히 이어지게
+            if (similarCaptions && similarCaptions.length > 0) {
+                const rows: CaptionExample[] = similarCaptions.map((c: { caption: string; likes?: number; similarity?: number }) => ({
+                    caption: c.caption,
+                    likes: c.likes || 0,
+                    similarity: c.similarity || 0,
+                }));
+                exampleCaptions = sampleRagCaptionsByTone(rows, tone, 4, ragConfig);
+            }
+        } catch (ragError) {
+            console.warn('RAG search failed, proceeding without examples:', ragError);
+        }
 
-2. MZ 코스프레는 NO, 하지만 너무 건조한 것도 NO
-   ❌ "완전 찰떡", "추위도 잊게 해줌" → 억지 유행어
-   ❌ "따뜻하고 달콤하니 기분 좋아짐. 요즘 날씨에 딱이네." → 너무 담백해서 재미없음
-   ✅ "생각보다 괜찮네", "은근 중독성 있음", "이거 하나면 되겠는데" → 솔직한 후기 느낌
+        // Build system prompt with real examples
+        const toneGuide = TONE_GUIDE[tone?.toUpperCase?.() || ''] || '자연스럽고 담백한 말투';
+        let systemPrompt = `당신은 동네 ${businessType} 사장님입니다. 인스타에 오늘 이야기를 씁니다.
 
-3. 구체적인 상황이나 감정 넣기
-   - "오늘 손님이 물어보셔서", "아침에 생각나서", "요즘 잘 나가는"
-   - "만들면서 맛봤는데", "첫 시도인데 생각보다", "이번에 레시피 바꿔봤는데"
-   - 스토리가 있으면 훨씬 자연스러움
+## 금지 (광고스러운 표현):
+- "~해보세요", "~만나보세요", "~오세요" (권유형)
+- "특별한", "완벽한", "최고의", "행복" (과장 형용사)
+- "여러분", "고객님" (호칭)
 
-4. 문장 연결과 호흡
-   - 너무 짧게 끊지 말고 2-3개 문장을 자연스럽게 이어가기
-   - "~인데", "~거든", "~는데", "~긴 함" 등으로 연결
-   - 한 호흡에 읽히는 느낌
+## 좋은 예시 (이런 느낌으로):
+- "가격대는 살짝 있는 편인데 맛보면 진짜 맛있음. 이건 자신있어요"
+- "오늘 처음 만들어봤는데 생각보다 반응이 좋아서 기분 좋네요"
+- "날씨가 추워서 따뜻한 음료가 잘 나가는 날. 딸기라떼도 준비해뒀어요"
+- "새로 넣어본 메뉴인데 색감이 너무 예뻐서 자꾸 보게 됨"
 
-5. 적당한 감정 표현
-   - 이모지 2-3개 정도는 OK
-   - "ㅋㅋ", "ㅎㅎ" 자연스럽게 사용 가능
-   - 근데 느낌표(!)는 1개 정도만
+## 포인트:
+- 100-150자 정도로 성의있게
+- 메뉴 설명 + 본인 느낌이나 오늘 상황을 자연스럽게
+- 솔직하게 (가격, 맛, 반응 등)
+- 이모지는 1-2개만
+- 톤 가이드: ${toneGuide}
 
-JSON:
-- caption: 80-120자 (너무 짧지도, 길지도 않게. 자연스러운 대화 길이)
-- hashtags: 4-5개
-- storyPhrases: 3개
-- engagementQuestion: 1개
+조건: ${businessType} / ${tone} / ${purpose}`;
 
-핵심: 친구한테 카톡으로 "야 오늘 이거 만들어봤는데~" 하고 보내는 느낌.
-너무 건조하지도, 너무 애쓰지도 않게. 적당한 디테일과 잡담이 들어간 자연스러운 톤.`;
+        // Add real examples if available
+        if (exampleCaptions.length > 0) {
+            systemPrompt += `
+
+## 아래 실제 인스타그램 게시물들의 말투와 분위기를 그대로 따라해주세요:
+
+${exampleCaptions.slice(0, 3).map((caption, i) => `[예시 ${i + 1}]\n${caption.substring(0, 400)}`).join('\n\n')}`;
+        }
+
+        systemPrompt += `
+
+JSON으로 응답:
+- caption: 100-150자. 성의있게 but 광고스럽지 않게. 위 예시들 참고.
+- hashtags: 5-7개 배열
+- storyPhrases: 3개 배열 (스토리용 짧은 문구)
+- engagementQuestion: 자연스러운 질문 1개`;
 
         const completion = await openai.chat.completions.create({
             model: 'gpt-4o-mini',
             messages: [
                 { role: 'system', content: systemPrompt },
-                { role: 'user', content: `${content}\n\n이거로 인스타 올릴건데 글 써줘. 너무 건조하지 않게 적당히 디테일이나 뒷얘기 넣어서 재미있게. 근데 유행어 억지로 쓰거나 광고처럼 되지는 말고.` }
+                {
+                    role: 'user',
+                    content: `홍보 내용: ${content}
+오늘 상황:
+- 날씨: ${contextWeather || '미입력'}
+- 재고/운영상황: ${contextInventory || '미입력'}
+- 손님 반응: ${contextReaction || '미입력'}
+
+요청: 광고 문구처럼 보이지 않게, 실제로 오늘 가게에서 있었던 말처럼 써주세요.`,
+                }
             ],
             response_format: { type: 'json_object' },
+            n: 3,
             temperature: 0.9,
             presence_penalty: 0.4,
             frequency_penalty: 0.4,
             top_p: 0.95,
         });
 
-        const result = JSON.parse(completion.choices[0].message.content || '{}');
+        const sourceForScoring = contextualInput || content;
+        const candidates = completion.choices
+            .map((choice) => parseGeneratedResult(choice.message.content))
+            .filter((item) => item.caption);
+
+        let result = candidates[0] || parseGeneratedResult(completion.choices[0]?.message?.content);
+        let bestIssues = getCaptionQualityIssues(result.caption);
+        let bestScore = -Infinity;
+
+        for (const candidate of candidates) {
+            const { score, issues } = scoreGeneratedResult(candidate, sourceForScoring, tone, scoringConfig);
+            if (score > bestScore) {
+                bestScore = score;
+                bestIssues = issues;
+                result = candidate;
+            }
+        }
+
+        // 2차 보정: AI스러운 문구가 감지되면 캡션만 자연스럽게 다시 작성
+        if (bestIssues.length > 0 && result.caption) {
+            const rewrite = await openai.chat.completions.create({
+                model: 'gpt-4o-mini',
+                messages: [
+                    {
+                        role: 'system',
+                        content: `너는 인스타 캡션 문장 교정자다.
+원문 의미와 사실은 유지하고 말투만 더 사람답게 바꾼다.
+새로운 사실을 추가하지 않는다.
+권유형/과장형 광고 문구를 제거한다.
+응답은 JSON {"caption":"..."} 으로만 준다.`,
+                    },
+                    {
+                        role: 'user',
+                        content: `입력 정보: ${sourceForScoring}
+원본 캡션: ${result.caption}
+문제점: ${bestIssues.join(', ')}
+목표 톤: ${toneGuide}
+길이: 100~150자`,
+                    },
+                ],
+                response_format: { type: 'json_object' },
+                temperature: 0.7,
+            });
+
+            const rewritten = parseGeneratedResult(rewrite.choices[0].message.content);
+            if (rewritten.caption) {
+                result.caption = rewritten.caption;
+            }
+        }
 
         // Save to database
         const { data: generation, error: insertError } = await supabaseAdmin

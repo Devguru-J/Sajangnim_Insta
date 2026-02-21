@@ -38,6 +38,11 @@ export const api = {
     content: string
     tone: string
     purpose: string
+    todayContext?: {
+      weather?: string
+      inventoryStatus?: string
+      customerReaction?: string
+    }
   }) =>
     apiRequest('/generate', {
       method: 'POST',
