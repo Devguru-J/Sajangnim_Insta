@@ -36,6 +36,7 @@ type CaptionExample = {
     caption: string;
     likes: number;
     similarity: number;
+    tone?: string | null;
 };
 
 type TodayContext = {
@@ -172,7 +173,8 @@ const sampleRagCaptionsByTone = (
     const normalizedTone = (tone || '').toUpperCase();
 
     const scored = rows.map((row) => {
-        const detectedTone = detectToneFromCaption(row.caption);
+        const rowTone = (row.tone || '').toUpperCase();
+        const detectedTone = rowTone || detectToneFromCaption(row.caption);
         const toneBonus = detectedTone === normalizedTone ? ragConfig.toneBonus : 0;
         const likesScore = Math.min(row.likes || 0, 800) / 800 * ragConfig.likesWeight;
         const score = (row.similarity || 0) * ragConfig.similarityWeight + likesScore + toneBonus;
@@ -309,17 +311,41 @@ export const registerGenerateRoutes = (app: Hono<{ Bindings: Bindings }>) => {
                 });
 
                 const queryEmbedding = `[${embeddingResponse.data[0].embedding.join(',')}]`;
-                const { data: similarCaptions } = await supabaseAdmin.rpc('match_captions', {
+                const normalizedTone = (tone || '').toUpperCase();
+                const { data: toneCaptions } = await supabaseAdmin.rpc('match_captions', {
                     query_embedding: queryEmbedding,
                     match_category: category,
                     match_count: 9,
+                    match_tone: normalizedTone || null,
                 });
 
-                if (similarCaptions && similarCaptions.length > 0) {
-                    const rows: CaptionExample[] = similarCaptions.map((row: { caption: string; likes?: number; similarity?: number }) => ({
+                let mergedCaptions = toneCaptions || [];
+                if (mergedCaptions.length < 4) {
+                    const { data: fallbackCaptions } = await supabaseAdmin.rpc('match_captions', {
+                        query_embedding: queryEmbedding,
+                        match_category: category,
+                        match_count: 12,
+                        match_tone: null,
+                    });
+
+                    if (fallbackCaptions && fallbackCaptions.length > 0) {
+                        const seenCaption = new Set(mergedCaptions.map((row: { caption: string }) => row.caption));
+                        for (const row of fallbackCaptions) {
+                            if (!seenCaption.has(row.caption)) {
+                                mergedCaptions.push(row);
+                                seenCaption.add(row.caption);
+                            }
+                            if (mergedCaptions.length >= 12) break;
+                        }
+                    }
+                }
+
+                if (mergedCaptions.length > 0) {
+                    const rows: CaptionExample[] = mergedCaptions.map((row: { caption: string; likes?: number; similarity?: number; tone?: string | null }) => ({
                         caption: row.caption,
                         likes: row.likes || 0,
                         similarity: row.similarity || 0,
+                        tone: row.tone || null,
                     }));
                     exampleCaptions = sampleRagCaptionsByTone(rows, tone, 4, ragConfig);
                 }
