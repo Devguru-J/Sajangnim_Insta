@@ -107,6 +107,16 @@ const AI_LIKE_PATTERNS = [
     /행복/g,
 ];
 
+const GENERIC_CAPTION_PATTERNS = [
+    /좋은\s*하루/g,
+    /기분이\s*좋네요/g,
+    /잘\s*어울리는\s*음료/gi,
+    /상큼하고\s*부드럽/gi,
+    /반응도\s*좋았/gi,
+    /것\s*같아요/g,
+    /입니다\./g,
+];
+
 type GenerationResult = {
     caption: string;
     hashtags: string[];
@@ -197,6 +207,17 @@ const getCaptionQualityIssues = (caption: string): string[] => {
     const exclamationCount = (trimmed.match(/!/g) || []).length;
     if (exclamationCount >= 3) {
         issues.push('느낌표 사용이 과하다.');
+    }
+
+    const genericHits = GENERIC_CAPTION_PATTERNS.reduce((count, regex) => count + ((trimmed.match(regex) || []).length), 0);
+    if (genericHits > 0) {
+        issues.push('뻔하거나 템플릿 같은 표현이 포함되어 있다.');
+    }
+
+    const sentenceEndings = trimmed.split(/[.!?]/).map((s) => s.trim()).filter(Boolean);
+    const formalEndingCount = sentenceEndings.filter((s) => /(습니다|했어요|예요|입니다|네요)$/.test(s)).length;
+    if (sentenceEndings.length >= 3 && formalEndingCount === sentenceEndings.length) {
+        issues.push('문장 끝맺음이 너무 비슷해 기계적으로 들린다.');
     }
 
     return issues;
@@ -402,6 +423,8 @@ app.post('/generate', async (c) => {
 - "~해보세요", "~만나보세요", "~오세요" (권유형)
 - "특별한", "완벽한", "최고의", "행복" (과장 형용사)
 - "여러분", "고객님" (호칭)
+- "요즘 날씨와 잘 어울리는 음료인 것 같아요" 같은 교과서형 마무리
+- "기분이 좋네요", "반응도 좋았어서" 같은 템플릿 문장
 
 ## 좋은 예시 (이런 느낌으로):
 - "가격대는 살짝 있는 편인데 맛보면 진짜 맛있음. 이건 자신있어요"
@@ -415,6 +438,8 @@ app.post('/generate', async (c) => {
 - 솔직하게 (가격, 맛, 반응 등)
 - 이모지는 1-2개만
 - 톤 가이드: ${toneGuide}
+- 3~4문장일 때 문장 끝맺음을 다양하게 (예: "~했어요 / ~더라고요 / ~네요" 반복 금지)
+- 최소 1문장은 실제 현장 디테일(주문 반응, 준비 과정, 재고/날씨 중 1개)을 넣기
 
 조건: ${businessType} / ${tone} / ${purpose}`;
 
@@ -487,6 +512,8 @@ JSON으로 응답:
 원문 의미와 사실은 유지하고 말투만 더 사람답게 바꾼다.
 새로운 사실을 추가하지 않는다.
 권유형/과장형 광고 문구를 제거한다.
+뻔한 마무리 문장("~것 같아요", "기분이 좋네요")을 줄이고 구어체로 바꾼다.
+문장 끝맺음이 반복되면 서로 다르게 섞는다.
 응답은 JSON {"caption":"..."} 으로만 준다.`,
                     },
                     {
