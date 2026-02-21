@@ -6,6 +6,11 @@ import SubscriptionCard from "@/components/SubscriptionCard";
 import EmailChangeModal from "@/components/EmailChangeModal";
 import DangerZone from "@/components/DangerZone";
 
+const REGION_OPTIONS = [
+    "서울", "경기", "인천", "부산", "대구", "대전", "광주", "울산", "세종",
+    "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주",
+];
+
 interface ProfileFormProps {
     profile: any;
     userEmail: string;
@@ -154,10 +159,34 @@ export default function ProfileForm({ profile, userEmail, userId, subscriptionSt
                                     className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-neutral-900 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all appearance-none pr-10"
                                 >
                                     <option value="">선택해주세요</option>
-                                    <option value="cafe">카페/베이커리</option>
-                                    <option value="salon">미용실/뷰티</option>
-                                    <option value="restaurant">식당/요식업</option>
-                                    <option value="other">기타</option>
+                                    <option value="CAFE">카페/베이커리</option>
+                                    <option value="SALON">미용실/뷰티</option>
+                                    <option value="RESTAURANT">식당/요식업</option>
+                                    <option value="GYM">헬스장/피트니스</option>
+                                    <option value="OTHER">기타</option>
+                                </select>
+                                <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none">
+                                    expand_more
+                                </span>
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-text-sub dark:text-gray-300 mb-2">지역</label>
+                            <div className="relative">
+                                <select
+                                    value={city}
+                                    onChange={(e) => setCity(e.target.value)}
+                                    className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-neutral-900 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all appearance-none pr-10"
+                                >
+                                    <option value="">선택해주세요</option>
+                                    {city && !REGION_OPTIONS.includes(city) && (
+                                        <option value={city}>{city}</option>
+                                    )}
+                                    {REGION_OPTIONS.map((region) => (
+                                        <option key={region} value={region}>
+                                            {region}
+                                        </option>
+                                    ))}
                                 </select>
                                 <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none">
                                     expand_more
