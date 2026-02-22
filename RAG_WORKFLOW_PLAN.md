@@ -190,3 +190,57 @@ Day 7
 1. `routes/caption-examples.ts` 추가 (`/caption-examples/embed`, `/caption-examples/search`)
 2. `lib/rag.ts`, `lib/scoring.ts`로 생성 로직 추가 분리
 3. 실패 재시도/배치 처리를 위한 job 테이블 추가
+
+---
+
+## 10. 현재 진행 현황 (2026-02-21)
+
+## 완료
+1. Hono API 리팩터링 완료
+- `functions/api/[[route]].ts` 단일 파일 구조를 `app + routes + lib + types`로 분리
+
+2. 톤 기반 RAG 검색 반영
+- `caption_examples.tone` 컬럼 추가
+- `match_captions` 함수 확장 (`match_tone` 지원)
+- 파일: `supabase/migrations/20260221182000_add_tone_to_caption_examples.sql`
+
+3. 생성 API 톤 우선 검색 로직 반영
+- 톤 일치 샘플 우선 조회
+- 톤 샘플 부족 시 무톤/일반 샘플 fallback
+- 파일: `functions/api/routes/generate.ts`
+
+4. 데이터 정제/적재 파이프라인 스크립트 추가
+- 정제: `scripts/prepare-captions.mjs`
+- 임베딩 적재: `scripts/embed-captions.ts`
+- 톤 백필: `scripts/backfill-caption-tones.mjs`
+
+5. 실제 데이터 처리 완료
+- 원본: `data/clean_captions.csv` (364행)
+- 정제본: `data/clean_captions_prepared.csv` (111행)
+- 임베딩 저장: 111건 성공
+- 기존 `tone=NULL` 백필: 280건 업데이트
+
+6. 톤 분리 동작 검증 완료
+- 테스트 스크립트: `scripts/test-tone-rag.mjs`
+- 업종/톤별 검색 결과에서 톤 일치율 100% 확인
+- 단, `salon + PROFESSIONAL` 샘플 수 부족(5건)
+
+## 현재 한계
+1. 데이터 수량/품질 부족
+- owner-style 고품질 샘플이 적어서 문장 안정성에 한계
+- 일부 추천/큐레이션/리뷰형 문장 노이즈가 잔존
+
+2. 톤 밸런스 불균형
+- PROFESSIONAL 톤 샘플이 상대적으로 적음
+
+## 다음 우선순위
+1. 크롤링 추가 수집 + 정제 강화
+- 목표: 업종별 최소 300개, 톤별 최소 80~100개
+- owner-style 비율 50% 이상 확보
+
+2. 생성 품질 A/B 테스트
+- 동일 입력에 대해 톤 3종 결과 비교(어색함, 톤 구분감, 복붙 느낌)
+- 점수 기반으로 프롬프트/재랭킹 가중치 조정
+
+3. 운영 루프 정착
+- 주기 실행: `prepare-captions` → `embed-captions` → `backfill-caption-tones`
