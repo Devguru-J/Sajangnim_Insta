@@ -39,6 +39,7 @@ export default function GenerateForm({ userIndustry }: GenerateFormProps) {
     const [weather, setWeather] = useState('');
     const [inventoryStatus, setInventoryStatus] = useState('');
     const [customerReaction, setCustomerReaction] = useState('');
+    const [showContextFields, setShowContextFields] = useState(false);
     const [preview, setPreview] = useState<GeneratedPreview | null>(null);
     const [deviceTime, setDeviceTime] = useState(() => formatDeviceTime(new Date()));
 
@@ -169,27 +170,49 @@ export default function GenerateForm({ userIndustry }: GenerateFormProps) {
                         </div>
 
                         <div className="space-y-3">
-                            <label className="block text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                                오늘 실제 상황 (선택)
-                            </label>
-                            <input
-                                value={weather}
-                                onChange={(e) => setWeather(e.target.value)}
-                                placeholder="날씨 예: 비 와서 따뜻한 음료 주문이 많아요"
-                                className="w-full h-11 px-4 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 placeholder:text-zinc-400 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
-                            />
-                            <input
-                                value={inventoryStatus}
-                                onChange={(e) => setInventoryStatus(e.target.value)}
-                                placeholder="재고/운영상황 예: 딸기 재고가 넉넉해서 오늘은 딸기라떼 중심으로 준비"
-                                className="w-full h-11 px-4 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 placeholder:text-zinc-400 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
-                            />
-                            <input
-                                value={customerReaction}
-                                onChange={(e) => setCustomerReaction(e.target.value)}
-                                placeholder="손님 반응 예: 신메뉴 시음 반응이 좋아서 재주문이 나왔어요"
-                                className="w-full h-11 px-4 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 placeholder:text-zinc-400 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
-                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowContextFields((prev) => !prev)}
+                                className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 hover:border-primary/60 transition-colors cursor-pointer"
+                            >
+                                <div className="text-left">
+                                    <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                                        오늘 실제 상황 (선택)
+                                    </p>
+                                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                                        상황 추가하기
+                                    </p>
+                                </div>
+                                <span
+                                    className={`material-symbols-outlined text-zinc-500 transition-transform ${showContextFields ? 'rotate-180' : ''
+                                        }`}
+                                >
+                                    expand_more
+                                </span>
+                            </button>
+
+                            {showContextFields && (
+                                <div className="space-y-3 animate-fade-in">
+                                    <input
+                                        value={weather}
+                                        onChange={(e) => setWeather(e.target.value)}
+                                        placeholder="날씨 예: 비 와서 따뜻한 음료 주문이 많아요"
+                                        className="w-full h-11 px-4 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 placeholder:text-zinc-400 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                                    />
+                                    <input
+                                        value={inventoryStatus}
+                                        onChange={(e) => setInventoryStatus(e.target.value)}
+                                        placeholder="재고/운영상황 예: 딸기 재고가 넉넉해서 오늘은 딸기라떼 중심으로 준비"
+                                        className="w-full h-11 px-4 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 placeholder:text-zinc-400 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                                    />
+                                    <input
+                                        value={customerReaction}
+                                        onChange={(e) => setCustomerReaction(e.target.value)}
+                                        placeholder="손님 반응 예: 신메뉴 시음 반응이 좋아서 재주문이 나왔어요"
+                                        className="w-full h-11 px-4 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 placeholder:text-zinc-400 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                                    />
+                                </div>
+                            )}
                         </div>
 
                         <div>
