@@ -1,0 +1,101 @@
+{
+  "nodes": [
+    {
+      "id": "n-root",
+      "type": "text",
+      "text": "INSTAGRAM RAG BOARD\\n(확대/드래그 가능)",
+      "x": -80,
+      "y": -420,
+      "width": 360,
+      "height": 120,
+      "color": "4"
+    },
+    {
+      "id": "n-done",
+      "type": "text",
+      "text": "완료\\n- [x] Hono 리팩터링\\n- [x] 톤 기반 RAG\\n- [x] tone 컬럼/함수 적용\\n- [x] 임베딩 111건 적재\\n- [x] tone NULL 백필\\n- [x] 톤별 검색 테스트",
+      "x": -520,
+      "y": -180,
+      "width": 360,
+      "height": 260,
+      "color": "2"
+    },
+    {
+      "id": "n-inprogress",
+      "type": "text",
+      "text": "진행 중\\n- [ ] 추가 크롤링 진행\\n- [ ] owner-style 샘플 확대",
+      "x": -80,
+      "y": -180,
+      "width": 320,
+      "height": 180,
+      "color": "3"
+    },
+    {
+      "id": "n-next",
+      "type": "text",
+      "text": "다음 액션\\n- [ ] prepare-captions 실행\\n- [ ] embed-captions 실행\\n- [ ] backfill-caption-tones 실행\\n- [ ] test-tone-rag 실행",
+      "x": 300,
+      "y": -180,
+      "width": 360,
+      "height": 220,
+      "color": "6"
+    },
+    {
+      "id": "n-quality",
+      "type": "text",
+      "text": "품질 실험\\n- [ ] 동일 입력 톤 3종 A/B\\n- [ ] 어색함/톤구분/복붙 점수화\\n- [ ] 재랭킹 가중치 튜닝",
+      "x": -320,
+      "y": 120,
+      "width": 360,
+      "height": 200,
+      "color": "5"
+    },
+    {
+      "id": "n-target",
+      "type": "text",
+      "text": "목표\\n- [ ] 업종별 300+\\n- [ ] 톤별 80~100+\\n- [ ] owner-style 50%+\\n- [ ] salon professional 확충",
+      "x": 120,
+      "y": 120,
+      "width": 360,
+      "height": 200,
+      "color": "1"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "fromNode": "n-root",
+      "fromSide": "bottom",
+      "toNode": "n-done",
+      "toSide": "top"
+    },
+    {
+      "id": "e2",
+      "fromNode": "n-root",
+      "fromSide": "bottom",
+      "toNode": "n-inprogress",
+      "toSide": "top"
+    },
+    {
+      "id": "e3",
+      "fromNode": "n-root",
+      "fromSide": "bottom",
+      "toNode": "n-next",
+      "toSide": "top"
+    },
+    {
+      "id": "e4",
+      "fromNode": "n-inprogress",
+      "fromSide": "bottom",
+      "toNode": "n-quality",
+      "toSide": "top"
+    },
+    {
+      "id": "e5",
+      "fromNode": "n-next",
+      "fromSide": "bottom",
+      "toNode": "n-target",
+      "toSide": "top"
+    }
+  ]
+}

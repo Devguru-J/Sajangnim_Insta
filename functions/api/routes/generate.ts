@@ -17,8 +17,43 @@ const TONE_GUIDE: Record<string, string> = {
     PROFESSIONAL: '차분하고 신뢰감 있는 설명형 말투, 과장 금지',
 };
 
+const TONE_RULES: Record<string, string> = {
+    EMOTIONAL: `- 감정 단어는 자연스럽게 1~2회만 사용
+- 이모지는 최대 2개
+- 따뜻한 여운은 남기되 과장 금지
+- 안내문 말투 금지 ("안녕하세요", "저희", "문의", "예약", "고객님")`,
+    CASUAL: `- 대화하듯 짧은 문장 2~3개로 작성
+- "안녕하세요", "저희", "문의", "추천", "오세요" 같은 안내문 말투 금지
+- 과도한 감성 단어(행복/포근/설렘) 반복 금지
+- 권유형 문장 금지 ("와보세요", "드셔보세요", "놓치지 마세요")`,
+    PROFESSIONAL: `- 안내문처럼 명확하고 담백하게 작성
+- 감탄사/이모지 최소화(0~1개)
+- 권유형 광고 문구 금지, 사실 중심 표현`,
+};
+
+const TONE_TEMPERATURE: Record<string, number> = {
+    EMOTIONAL: 0.88,
+    CASUAL: 0.76,
+    PROFESSIONAL: 0.62,
+};
+
 const AI_LIKE_PATTERNS = [
     /여러분/g, /고객님/g, /만나보세요/g, /오세요/g, /지금\s*바로/g, /놓치지\s*마세요/g, /특별한/g, /완벽한/g, /최고의/g, /행복/g,
+];
+const CASUAL_FORBIDDEN_PATTERNS = [
+    /안녕하세요/g, /저희/g, /문의/g, /추천/g, /오세요/g, /드셔보세요/g, /방문해/g, /예약/g, /여러분/g, /고객님/g,
+];
+const PROFESSIONAL_SIGNAL_PATTERNS = [
+    /안내/g, /운영/g, /예약/g, /공지/g, /문의/g, /고객님/g, /저희/g, /습니다/g, /입니다/g,
+];
+const PROMO_FORBIDDEN_PATTERNS = [
+    /오세요/g, /만나보세요/g, /드셔보세요/g, /방문해보세요/g, /놓치지\s*마세요/g, /지금\s*바로/g, /추천드립니다/g,
+];
+const OWNER_VOICE_PATTERNS = [
+    /오늘/g, /저희/g, /우리/g, /준비/g, /만들/g, /품절/g, /오픈/g, /마감/g, /손님/g, /주문/g, /찾아주/g, /감사/g, /매장/g, /운영/g,
+];
+const EXAMPLE_NOISE_PATTERNS = [
+    /에디터/g, /모음집/g, /가이드/g, /팔로우/g, /DM/g, /메신저/g, /링크/g, /주차/g, /영업시간/g, /위치/g, /문의/g,
 ];
 
 const GENERIC_CAPTION_PATTERNS = [
@@ -100,6 +135,9 @@ const parseGeneratedResult = (raw: string | null | undefined): GenerationResult 
     }
 };
 
+const countPatternHits = (text: string, patterns: RegExp[]): number =>
+    patterns.reduce((sum, regex) => sum + ((text.match(regex) || []).length), 0);
+
 const getCaptionQualityIssues = (caption: string): string[] => {
     const issues: string[] = [];
     const trimmed = caption.trim();
@@ -129,6 +167,9 @@ const getCaptionQualityIssues = (caption: string): string[] => {
 const normalizeForComparison = (text: string): string =>
     text.replace(/\s+/g, ' ').replace(/[.,!?~]/g, '').trim().toLowerCase();
 
+const hasAiLikePattern = (text: string): boolean =>
+    AI_LIKE_PATTERNS.some((regex) => regex.test(text));
+
 const hasLiteralContextCopy = (caption: string, contexts: string[]): boolean => {
     const normalizedCaption = normalizeForComparison(caption);
     for (const ctx of contexts) {
@@ -153,15 +194,54 @@ const detectToneFromCaption = (caption: string): keyof typeof TONE_GUIDE => {
         (text.match(/따뜻|포근|설레|기분|감사|행복|분위기|여유|잔잔|소소/g) || []).length +
         (text.match(/[💛🧡❤️✨🌿☕️]/g) || []).length;
     const casualScore =
-        (text.match(/진짜|완전|살짝|요즘|오늘은|느낌|ㅋㅋ|ㅎㅎ|굿|찐/g) || []).length +
+        (text.match(/진짜|완전|살짝|요즘|오늘은|오늘|근데|그냥|딱|은근|ㅋㅋ|ㅎㅎ|굿|찐/g) || []).length +
         (text.match(/~|!{2,}/g) || []).length;
     const professionalScore =
-        (text.match(/안내|운영|예약|공지|준비했습니다|제공됩니다|가능합니다|권장드립니다|추천드립니다/g) || []).length +
+        (text.match(/안내|운영|예약|공지|준비했습니다|제공됩니다|가능합니다|권장드립니다|추천드립니다|안녕하세요|문의/g) || []).length +
         (text.match(/습니다|입니다/g) || []).length;
 
     if (professionalScore >= casualScore && professionalScore >= emotionalScore) return 'PROFESSIONAL';
-    if (emotionalScore >= casualScore) return 'EMOTIONAL';
+    if (casualScore >= emotionalScore) return 'CASUAL';
+    if (emotionalScore > casualScore) return 'EMOTIONAL';
     return 'CASUAL';
+};
+
+const isLikelyListStyle = (text: string): boolean => {
+    const numbered = (text.match(/\b\d+[.)]/g) || []).length;
+    const bullets = (text.match(/[•▪◽◾✅✔️]/g) || []).length;
+    return numbered >= 3 || bullets >= 6;
+};
+
+const hasOwnerVoice = (text: string): boolean =>
+    countPatternHits(text, OWNER_VOICE_PATTERNS) >= 1;
+
+const isUsableExampleForTone = (caption: string, tone: string, strict: boolean): boolean => {
+    const text = (caption || '').replace(/\s+/g, ' ').trim();
+    if (!text) return false;
+    if (text.length < 45 || text.length > (strict ? 180 : 220)) return false;
+    if (isLikelyListStyle(text)) return false;
+    if (countPatternHits(text, EXAMPLE_NOISE_PATTERNS) > (strict ? 0 : 1)) return false;
+    if (countPatternHits(text, PROMO_FORBIDDEN_PATTERNS) > 0) return false;
+
+    const normalizedTone = (tone || '').toUpperCase();
+    const professionalHits = countPatternHits(text, PROFESSIONAL_SIGNAL_PATTERNS);
+    const aiLikeHits = countPatternHits(text, AI_LIKE_PATTERNS);
+
+    if (normalizedTone === 'CASUAL') {
+        if (professionalHits > 0) return false;
+        if (countPatternHits(text, CASUAL_FORBIDDEN_PATTERNS) > 0) return false;
+        if (strict && !hasOwnerVoice(text)) return false;
+    }
+    if (normalizedTone === 'EMOTIONAL') {
+        if (professionalHits >= 2) return false;
+        if (strict && !hasOwnerVoice(text)) return false;
+    }
+    if (normalizedTone === 'PROFESSIONAL') {
+        if (strict && professionalHits < 1) return false;
+        if ((text.match(/!/g) || []).length > 1) return false;
+    }
+
+    return aiLikeHits === 0;
 };
 
 const sampleRagCaptionsByTone = (
@@ -171,8 +251,15 @@ const sampleRagCaptionsByTone = (
     ragConfig: RagConfig
 ): string[] => {
     const normalizedTone = (tone || '').toUpperCase();
+    const strictRows = rows.filter((row) => isUsableExampleForTone(row.caption, normalizedTone, true));
+    const relaxedRows = rows.filter((row) => isUsableExampleForTone(row.caption, normalizedTone, false));
+    const sourceRows = strictRows.length > 0 ? strictRows : relaxedRows;
 
-    const scored = rows.map((row) => {
+    if (sourceRows.length === 0) {
+        return [];
+    }
+
+    const scored = sourceRows.map((row) => {
         const rowTone = (row.tone || '').toUpperCase();
         const detectedTone = rowTone || detectToneFromCaption(row.caption);
         const toneBonus = detectedTone === normalizedTone ? ragConfig.toneBonus : 0;
@@ -231,6 +318,16 @@ const scoreGeneratedResult = (
     const captionKeywords = new Set(extractKeywords(caption));
     const overlapCount = keywords.filter((keyword) => captionKeywords.has(keyword)).length;
     const keywordScore = Math.min(20, overlapCount * scoringConfig.keywordWeight);
+    const toneMismatchPenalty = detectToneFromCaption(caption) === normalizedTone ? 0 : 10;
+    const casualForbiddenHits = normalizedTone === 'CASUAL'
+        ? CASUAL_FORBIDDEN_PATTERNS.reduce((sum, regex) => sum + ((caption.match(regex) || []).length), 0)
+        : 0;
+    const casualForbiddenPenalty = casualForbiddenHits * 4;
+    const emotionalProfessionalSignalPenalty = normalizedTone === 'EMOTIONAL'
+        ? PROFESSIONAL_SIGNAL_PATTERNS.reduce((sum, regex) => sum + ((caption.match(regex) || []).length), 0) * 3
+        : 0;
+    const aiLikePenalty = hasAiLikePattern(caption) ? 8 : 0;
+    const promoPenalty = countPatternHits(caption, PROMO_FORBIDDEN_PATTERNS) * 5;
 
     const exclamationPenalty = Math.max(0, ((caption.match(/!/g) || []).length - 1) * scoringConfig.exclamationPenalty);
     const completenessPenalty =
@@ -245,11 +342,42 @@ const scoreGeneratedResult = (
         lengthScore +
         toneScore +
         keywordScore -
+        toneMismatchPenalty -
+        casualForbiddenPenalty -
+        emotionalProfessionalSignalPenalty -
+        aiLikePenalty -
+        promoPenalty -
         exclamationPenalty -
         completenessPenalty -
         issuePenalty -
         contextCopyPenalty;
     return { score, issues };
+};
+
+const getRewriteSystemPrompt = (tone: string): string => {
+    const normalizedTone = (tone || '').toUpperCase();
+    if (normalizedTone === 'CASUAL') {
+        return `너는 인스타 캡션 문장 교정자다.
+원문 사실은 유지하고 톤만 캐주얼로 고친다.
+짧은 문장 2~3개로 자연스럽게 작성한다.
+금지어: 안녕하세요, 저희, 여러분, 고객님, 추천, 문의, 예약, 오세요, 만나보세요, 드셔보세요
+새 사실 추가 금지.
+응답은 JSON {"caption":"..."} 으로만 준다.`;
+    }
+    if (normalizedTone === 'EMOTIONAL') {
+        return `너는 인스타 캡션 문장 교정자다.
+원문 사실은 유지하고 감성 톤으로 고친다.
+따뜻한 뉘앙스는 유지하되 안내문/공지문 말투는 금지한다.
+금지어: 안녕하세요, 저희, 고객님, 문의, 예약
+새 사실 추가 금지.
+응답은 JSON {"caption":"..."} 으로만 준다.`;
+    }
+    return `너는 인스타 캡션 문장 교정자다.
+원문 사실은 유지하고 전문적 톤으로 고친다.
+명확하고 담백한 안내형 문장으로 작성한다.
+권유형 광고 문구는 제거한다.
+새 사실 추가 금지.
+응답은 JSON {"caption":"..."} 으로만 준다.`;
 };
 
 export const registerGenerateRoutes = (app: Hono<{ Bindings: Bindings }>) => {
@@ -354,6 +482,9 @@ export const registerGenerateRoutes = (app: Hono<{ Bindings: Bindings }>) => {
             }
 
             const toneGuide = TONE_GUIDE[tone?.toUpperCase?.() || ''] || '자연스럽고 담백한 말투';
+            const normalizedTone = tone?.toUpperCase?.() || 'CASUAL';
+            const toneRule = TONE_RULES[normalizedTone] || TONE_RULES.CASUAL;
+            const generationTemperature = TONE_TEMPERATURE[normalizedTone] ?? 0.8;
             let systemPrompt = `당신은 동네 ${businessType} 사장님입니다. 인스타에 오늘 이야기를 씁니다.
 
 ## 금지 (광고스러운 표현):
@@ -375,6 +506,8 @@ export const registerGenerateRoutes = (app: Hono<{ Bindings: Bindings }>) => {
 - 솔직하게 (가격, 맛, 반응 등)
 - 이모지는 1-2개만
 - 톤 가이드: ${toneGuide}
+- 톤 강제 규칙:
+${toneRule}
 - 3~4문장일 때 문장 끝맺음을 다양하게 (예: "~했어요 / ~더라고요 / ~네요" 반복 금지)
 - 최소 1문장은 실제 현장 디테일(주문 반응, 준비 과정, 재고/날씨 중 1개)을 넣기
 - 입력된 "오늘 상황" 문장을 그대로 복사하지 말고 반드시 자연스럽게 의역해서 녹이기
@@ -385,6 +518,7 @@ export const registerGenerateRoutes = (app: Hono<{ Bindings: Bindings }>) => {
                 systemPrompt += `
 
 ## 아래 실제 인스타그램 게시물들의 말투와 분위기를 그대로 따라해주세요:
+- 단, 문장을 그대로 복사하지 말고 구조와 리듬만 참고하세요.
 
 ${exampleCaptions.slice(0, 3).map((caption, i) => `[예시 ${i + 1}]\n${caption.substring(0, 400)}`).join('\n\n')}`;
             }
@@ -414,7 +548,7 @@ JSON으로 응답:
                 ],
                 response_format: { type: 'json_object' },
                 n: 3,
-                temperature: 0.9,
+                temperature: generationTemperature,
                 presence_penalty: 0.4,
                 frequency_penalty: 0.4,
                 top_p: 0.95,
@@ -448,14 +582,7 @@ JSON으로 응답:
                     messages: [
                         {
                             role: 'system',
-                            content: `너는 인스타 캡션 문장 교정자다.
-원문 의미와 사실은 유지하고 말투만 더 사람답게 바꾼다.
-새로운 사실을 추가하지 않는다.
-권유형/과장형 광고 문구를 제거한다.
-뻔한 마무리 문장("~것 같아요", "기분이 좋네요")을 줄이고 구어체로 바꾼다.
-문장 끝맺음이 반복되면 서로 다르게 섞는다.
-입력 문장을 그대로 복붙한 표현이 있으면 자연스럽게 의역한다.
-응답은 JSON {"caption":"..."} 으로만 준다.`,
+                            content: getRewriteSystemPrompt(normalizedTone),
                         },
                         {
                             role: 'user',
@@ -463,6 +590,8 @@ JSON으로 응답:
 원본 캡션: ${result.caption}
 문제점: ${bestIssues.join(', ')}
 목표 톤: ${toneGuide}
+톤 강제 규칙:
+${toneRule}
 길이: 100~150자`,
                         },
                     ],
@@ -472,6 +601,50 @@ JSON으로 응답:
 
                 const rewritten = parseGeneratedResult(rewrite.choices[0].message.content);
                 if (rewritten.caption) result.caption = rewritten.caption;
+            }
+
+            // 최종 가드: 톤 이탈(CASUAL/PROFESSIONAL)이나 광고형 패턴이 남아있으면 한 번 더 강제 보정
+            const finalDetectedTone = detectToneFromCaption(result.caption || '');
+            const casualForbiddenRemaining = normalizedTone === 'CASUAL'
+                ? CASUAL_FORBIDDEN_PATTERNS.some((regex) => regex.test(result.caption || ''))
+                : false;
+            const needsToneFix =
+                ((normalizedTone === 'CASUAL' || normalizedTone === 'PROFESSIONAL') && finalDetectedTone !== normalizedTone) ||
+                (normalizedTone === 'EMOTIONAL' && finalDetectedTone === 'PROFESSIONAL') ||
+                hasAiLikePattern(result.caption || '') ||
+                casualForbiddenRemaining;
+
+            if (needsToneFix && result.caption) {
+                const strictRewrite = await openai.chat.completions.create({
+                    model: 'gpt-4o-mini',
+                    messages: [
+                        {
+                            role: 'system',
+                            content: `너는 인스타 캡션 교정자다.
+목표 톤을 반드시 지켜 캡션을 다시 쓴다.
+금지어: 여러분, 고객님, 오세요, 만나보세요, 지금 바로, 놓치지 마세요
+CASUAL이면 금지어 추가: 안녕하세요, 저희, 문의, 추천, 예약
+EMOTIONAL이면 안내문/공지문 스타일 금지
+새 사실 추가 금지. 입력 사실만 사용.
+CASUAL: 2~3문장 / EMOTIONAL, PROFESSIONAL: 3~4문장
+100~150자.
+JSON {"caption":"..."}만 출력.`,
+                        },
+                        {
+                            role: 'user',
+                            content: `목표 톤: ${normalizedTone}
+톤 규칙:
+${toneRule}
+원문: ${result.caption}
+입력 정보: ${sourceForScoring}`,
+                        },
+                    ],
+                    response_format: { type: 'json_object' },
+                    temperature: normalizedTone === 'CASUAL' ? 0.35 : 0.45,
+                });
+
+                const stricter = parseGeneratedResult(strictRewrite.choices[0].message.content);
+                if (stricter.caption) result.caption = stricter.caption;
             }
 
             const { data: generation, error: insertError } = await supabaseAdmin
