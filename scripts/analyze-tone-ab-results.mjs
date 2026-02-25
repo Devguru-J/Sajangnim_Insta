@@ -82,6 +82,10 @@ function safeNum(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function safeBoolFrom01(v) {
+  return String(v ?? '').trim() === '1';
+}
+
 function pushMapCount(map, key) {
   map[key] = (map[key] || 0) + 1;
 }
@@ -108,6 +112,11 @@ function main() {
 
   const tones = ['EMOTIONAL', 'CASUAL', 'PROFESSIONAL'];
   const byToneScores = { EMOTIONAL: [], CASUAL: [], PROFESSIONAL: [] };
+  const passByTone = {
+    EMOTIONAL: { pass: 0, total: 0 },
+    CASUAL: { pass: 0, total: 0 },
+    PROFESSIONAL: { pass: 0, total: 0 },
+  };
   const confusion = {};
   const issueByTone = { EMOTIONAL: {}, CASUAL: {}, PROFESSIONAL: {} };
   const lowRows = [];
@@ -126,6 +135,12 @@ function main() {
       .filter(Boolean);
 
     if (byToneScores[tone]) byToneScores[tone].push(score);
+    if (passByTone[tone]) {
+      const lengthOk = safeBoolFrom01(row.length_ok);
+      const hardBlocked = safeBoolFrom01(row.hard_blocked);
+      passByTone[tone].total += 1;
+      if (lengthOk && !hardBlocked) passByTone[tone].pass += 1;
+    }
     if (confusion[tone]) {
       if (!confusion[tone][detected]) confusion[tone][detected] = 0;
       confusion[tone][detected] += 1;
@@ -166,6 +181,15 @@ function main() {
   for (const tone of tones) {
     const row = confusion[tone];
     out.push(`- ${tone}: EMOTIONAL=${row.EMOTIONAL || 0}, CASUAL=${row.CASUAL || 0}, PROFESSIONAL=${row.PROFESSIONAL || 0}, ERROR=${row.ERROR || 0}`);
+  }
+  out.push('');
+
+  out.push('## Pass Rate (length_ok=1 and hard_blocked=0)');
+  for (const tone of tones) {
+    const total = passByTone[tone].total || 1;
+    const pass = passByTone[tone].pass || 0;
+    const rate = (pass / total) * 100;
+    out.push(`- ${tone}: ${pass}/${passByTone[tone].total} (${rate.toFixed(1)}%)`);
   }
   out.push('');
 

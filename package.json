@@ -9,7 +9,10 @@
     "preview": "vite preview",
     "dev:api": "wrangler pages dev dist --port 8787",
     "deploy": "npm run build && wrangler pages deploy dist",
-    "lint": "eslint"
+    "lint": "eslint",
+    "ab:daily": "./scripts/run-daily-tone-check.sh",
+    "captions:prepare": "node scripts/prepare-captions.mjs",
+    "captions:merge": "node scripts/merge-prepared-captions.mjs"
   },
   "dependencies": {
     "@splinetool/react-spline": "^4.1.0",

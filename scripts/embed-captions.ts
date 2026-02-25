@@ -57,6 +57,11 @@ interface CaptionRow {
     tone?: string;
 }
 
+type RetryConfig = {
+    maxAttempts: number;
+    baseDelayMs: number;
+};
+
 // CSV 파싱 (간단한 구현)
 function parseCSV(content: string): CaptionRow[] {
     const lines = content.split('\n');
@@ -172,8 +177,13 @@ async function main() {
     const validRows = rows.filter((row) => isValidCaption(pickCaption(row)));
     console.log(`✅ 유효한 캡션: ${validRows.length}개\n`);
 
-    // 배치 처리 (OpenAI 임베딩 API는 배치 지원)
-    const BATCH_SIZE = 50;
+    // 배치 처리 (환경변수로 조절 가능)
+    const parsedBatch = Number(process.env.EMBED_BATCH_SIZE || '25');
+    const BATCH_SIZE = Number.isFinite(parsedBatch) && parsedBatch > 0 ? parsedBatch : 25;
+    const retryConfig: RetryConfig = {
+        maxAttempts: 3,
+        baseDelayMs: 1200,
+    };
     let processed = 0;
     let inserted = 0;
 
@@ -186,10 +196,30 @@ async function main() {
 
         // 임베딩 생성
         try {
-            const embeddingResponse = await openai.embeddings.create({
-                model: 'text-embedding-3-small',
-                input: cleanedCaptions,
-            });
+            let embeddingResponse: Awaited<ReturnType<typeof openai.embeddings.create>> | null = null;
+            let lastError: unknown = null;
+
+            for (let attempt = 1; attempt <= retryConfig.maxAttempts; attempt++) {
+                try {
+                    embeddingResponse = await openai.embeddings.create({
+                        model: 'text-embedding-3-small',
+                        input: cleanedCaptions,
+                    });
+                    break;
+                } catch (error: any) {
+                    lastError = error;
+                    const status = error?.status ?? error?.cause?.status ?? 'unknown';
+                    const message = error?.message || error?.cause?.message || String(error);
+                    console.warn(`⚠️ 임베딩 재시도 ${attempt}/${retryConfig.maxAttempts} 실패 (status=${status}): ${message}`);
+                    if (attempt < retryConfig.maxAttempts) {
+                        await new Promise((resolve) => setTimeout(resolve, retryConfig.baseDelayMs * attempt));
+                    }
+                }
+            }
+
+            if (!embeddingResponse) {
+                throw lastError || new Error('embedding request failed');
+            }
 
             // Supabase에 저장 (pgvector 형식으로 변환)
             const records = batch.map((row, idx) => {
@@ -217,8 +247,8 @@ async function main() {
             if (error) {
                 console.error(`❌ 저장 오류:`, error.message);
             } else {
-                inserted += batch.length;
-                console.log(`   ✓ ${batch.length}개 저장 완료`);
+                inserted += records.length;
+                console.log(`   ✓ ${records.length}개 저장 완료`);
             }
 
             processed += batch.length;
@@ -227,7 +257,9 @@ async function main() {
             await new Promise(resolve => setTimeout(resolve, 500));
 
         } catch (error: any) {
-            console.error(`❌ 임베딩 오류:`, error.message);
+            const status = error?.status ?? error?.cause?.status ?? 'unknown';
+            const message = error?.message || error?.cause?.message || String(error);
+            console.error(`❌ 임베딩 오류 (status=${status}):`, message);
         }
     }
 

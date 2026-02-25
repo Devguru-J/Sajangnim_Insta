@@ -14,9 +14,26 @@ const TONE_GUIDE = {
   CASUAL: '친한 단골에게 말하듯 편하고 자연스러운 구어체 톤',
   PROFESSIONAL: '차분하고 신뢰감 있는 안내형 톤, 과장 금지',
 };
+const TONE_LENGTH_RANGE = {
+  CASUAL: { min: 85, max: 125 },
+  EMOTIONAL: { min: 110, max: 150 },
+  PROFESSIONAL: { min: 110, max: 150 },
+};
 
 const AI_LIKE_PATTERNS = [
   /여러분/g, /고객님/g, /만나보세요/g, /오세요/g, /지금\s*바로/g, /놓치지\s*마세요/g, /특별한/g, /완벽한/g, /최고의/g,
+];
+const HARD_BLOCK_PATTERNS = [
+  /여러분/g, /고객님/g, /오세요/g, /만나보세요/g, /지금\s*바로/g, /놓치지\s*마세요/g, /특별한/g, /완벽한/g, /최고의/g,
+];
+const EMOTIONAL_EXTRA_BLOCK_PATTERNS = [
+  /여러분의/g, /함께하고\s*싶어요/g, /마음을\s*사로잡/g, /소중한\s*순간/g,
+];
+const CASUAL_SIGNAL_PATTERNS = [
+  /요즘/g, /오늘/g, /근데/g, /살짝/g, /딱/g, /은근/g, /확실히/g, /하게\s*되/g, /더라구요/g, /했더니/g,
+];
+const EMOTIONAL_SIGNAL_PATTERNS = [
+  /따뜻/g, /포근/g, /설레/g, /기분/g, /감사/g, /행복/g, /여유/g, /잔잔/g, /소소/g, /분위기/g, /뿌듯/g, /[💛🧡❤️✨🌿☕️🍓]/g,
 ];
 const GENERIC_CAPTION_PATTERNS = [
   /좋은\s*하루/g, /기분이\s*좋네요/g, /잘\s*어울리는\s*음료/gi, /상큼하고\s*부드럽/gi, /반응도\s*좋았/gi, /것\s*같아요/g, /입니다\./g,
@@ -46,33 +63,70 @@ function normalizeForComparison(text) {
   return String(text || '').replace(/\s+/g, ' ').replace(/[.,!?~]/g, '').trim().toLowerCase();
 }
 
+function hasHardBlockedPattern(text) {
+  const t = String(text || '');
+  return HARD_BLOCK_PATTERNS.reduce((sum, regex) => sum + ((t.match(regex) || []).length), 0) > 0;
+}
+
+function hasEmotionalBlockedPattern(text) {
+  const t = String(text || '');
+  return EMOTIONAL_EXTRA_BLOCK_PATTERNS.reduce((sum, regex) => sum + ((t.match(regex) || []).length), 0) > 0;
+}
+
+function sanitizeBlockedPhrases(text, tone) {
+  const patterns = [...HARD_BLOCK_PATTERNS];
+  if (tone === 'EMOTIONAL') patterns.push(...EMOTIONAL_EXTRA_BLOCK_PATTERNS);
+  let out = String(text || '');
+  for (const pattern of patterns) out = out.replace(pattern, '');
+  return out
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([,.!?])/g, '$1')
+    .replace(/([,.!?]){2,}/g, '$1')
+    .trim();
+}
+
+function getToneLengthRange(tone) {
+  return TONE_LENGTH_RANGE[tone] || TONE_LENGTH_RANGE.CASUAL;
+}
+
+function isLengthOutOfTarget(text, tone = 'CASUAL') {
+  const range = getToneLengthRange(tone);
+  const len = String(text || '').trim().length;
+  return len < range.min || len > range.max;
+}
+
 function detectToneFromCaption(caption) {
   const text = String(caption || '').toLowerCase();
-  const emotionalScore =
-    (text.match(/따뜻|포근|설레|기분|감사|행복|분위기|여유|잔잔|소소/g) || []).length +
-    (text.match(/[💛🧡❤️✨🌿☕️🍓]/g) || []).length;
+  const emotionalScore = EMOTIONAL_SIGNAL_PATTERNS.reduce((sum, regex) => sum + ((text.match(regex) || []).length), 0);
   const casualScore =
-    (text.match(/진짜|완전|살짝|요즘|오늘은|느낌|ㅋㅋ|ㅎㅎ|굿|찐/g) || []).length +
-    (text.match(/~|!{2,}/g) || []).length;
+    (text.match(/진짜|완전|살짝|요즘|오늘은|오늘|근데|그냥|딱|은근|느낌|ㅋㅋ|ㅎㅎ|굿|찐/g) || []).length +
+    (text.match(/~|!{2,}/g) || []).length +
+    CASUAL_SIGNAL_PATTERNS.reduce((sum, regex) => sum + ((text.match(regex) || []).length), 0);
   const professionalScore =
     (text.match(/안내|운영|예약|공지|준비했습니다|제공됩니다|가능합니다|권장드립니다|추천드립니다|품절|오픈|마감/g) || []).length +
     (text.match(/습니다|입니다/g) || []).length;
 
-  if (professionalScore >= casualScore && professionalScore >= emotionalScore) return 'PROFESSIONAL';
-  if (emotionalScore >= casualScore) return 'EMOTIONAL';
+  if (professionalScore >= 2 && professionalScore >= casualScore + 1 && professionalScore >= emotionalScore + 1) return 'PROFESSIONAL';
+  if (casualScore >= emotionalScore + 1) return 'CASUAL';
+  if (emotionalScore >= casualScore + 1) return 'EMOTIONAL';
   return 'CASUAL';
 }
 
-function getCaptionIssues(caption) {
+function getCaptionIssues(caption, tone = 'CASUAL') {
   const issues = [];
   const trimmed = String(caption || '').trim();
-  if (trimmed.length < 90 || trimmed.length > 180) issues.push('length');
+  if (isLengthOutOfTarget(trimmed, tone)) issues.push('length');
 
   const aiHits = AI_LIKE_PATTERNS.reduce((sum, regex) => sum + ((trimmed.match(regex) || []).length), 0);
   if (aiHits > 0) issues.push('ai_like');
 
   const genericHits = GENERIC_CAPTION_PATTERNS.reduce((sum, regex) => sum + ((trimmed.match(regex) || []).length), 0);
   if (genericHits > 0) issues.push('generic');
+  const hardBlockedHits = HARD_BLOCK_PATTERNS.reduce((sum, regex) => sum + ((trimmed.match(regex) || []).length), 0);
+  const emotionalBlockedHits = tone === 'EMOTIONAL'
+    ? EMOTIONAL_EXTRA_BLOCK_PATTERNS.reduce((sum, regex) => sum + ((trimmed.match(regex) || []).length), 0)
+    : 0;
+  if (hardBlockedHits > 0 || emotionalBlockedHits > 0) issues.push('hard_blocked');
 
   const exclamationCount = (trimmed.match(/!/g) || []).length;
   if (exclamationCount >= 3) issues.push('too_many_exclamation');
@@ -82,10 +136,11 @@ function getCaptionIssues(caption) {
 
 function scoreCaption({ caption, expectedTone, sourceText }) {
   const trimmed = String(caption || '').trim();
-  const issues = getCaptionIssues(trimmed);
-  const targetLength = 125;
+  const issues = getCaptionIssues(trimmed, expectedTone);
+  const lengthRange = getToneLengthRange(expectedTone);
+  const targetLength = Math.floor((lengthRange.min + lengthRange.max) / 2);
 
-  const lengthScore = Math.max(0, 32 - Math.abs(trimmed.length - targetLength) * 0.5);
+  const lengthScore = Math.max(0, 32 - Math.abs(trimmed.length - targetLength) * 0.65);
   const detectedTone = detectToneFromCaption(trimmed);
   const toneScore = detectedTone === expectedTone ? 22 : 0;
 
@@ -109,7 +164,7 @@ function scoreCaption({ caption, expectedTone, sourceText }) {
   const relevanceScore = Math.min(20, overlap * 2);
 
   const copyPenalty = normalizeForComparison(trimmed).includes(normalizeForComparison(sourceText).slice(0, 30)) ? 8 : 0;
-  const issuePenalty = issues.length * 8;
+  const issuePenalty = issues.length * 8 + (issues.includes('hard_blocked') ? 18 : 0);
 
   const total = 30 + lengthScore + toneScore + relevanceScore - issuePenalty - copyPenalty;
   return {
@@ -126,6 +181,58 @@ function parseJsonResult(raw) {
   } catch {
     return '';
   }
+}
+
+function getRewriteSystemPrompt(tone) {
+  const range = getToneLengthRange(tone);
+  if (tone === 'CASUAL') {
+    return `너는 인스타 캡션 문장 교정자다.
+원문 사실은 유지하고 톤만 캐주얼로 고친다.
+짧은 문장 2~3개로 자연스럽게 작성한다.
+공지문체 종결(습니다/입니다) 금지.
+금지어: 안녕하세요, 저희, 여러분, 고객님, 추천, 문의, 예약, 오세요, 만나보세요, 드셔보세요, 지금 바로, 놓치지 마세요, 특별한, 완벽한, 최고의
+새 사실 추가 금지.
+길이 ${range.min}~${range.max}자.
+응답은 JSON {"caption":"..."} 으로만 준다.`;
+  }
+  if (tone === 'EMOTIONAL') {
+    return `너는 인스타 캡션 문장 교정자다.
+원문 사실은 유지하고 감성 톤으로 고친다.
+따뜻한 뉘앙스는 유지하되 안내문/공지문 말투는 금지한다.
+공지형 단어(안내/운영/예약/문의) 반복 금지.
+금지어: 안녕하세요, 저희, 여러분, 고객님, 문의, 예약, 오세요, 만나보세요, 지금 바로, 놓치지 마세요, 특별한, 완벽한, 최고의
+새 사실 추가 금지.
+길이 ${range.min}~${range.max}자.
+응답은 JSON {"caption":"..."} 으로만 준다.`;
+  }
+  return `너는 인스타 캡션 문장 교정자다.
+원문 사실은 유지하고 전문적 톤으로 고친다.
+명확하고 담백한 안내형 문장으로 작성한다.
+권유형 광고 문구는 제거한다.
+금지어: 여러분, 고객님, 오세요, 만나보세요, 지금 바로, 놓치지 마세요, 특별한, 완벽한, 최고의
+새 사실 추가 금지.
+길이 ${range.min}~${range.max}자.
+응답은 JSON {"caption":"..."} 으로만 준다.`;
+}
+
+async function rewriteCaption({ openai, model, tone, sourceText, caption, reason }) {
+  const rewrite = await openai.chat.completions.create({
+    model,
+    messages: [
+      { role: 'system', content: getRewriteSystemPrompt(tone) },
+      {
+        role: 'user',
+        content: `입력 정보: ${sourceText}
+원본 캡션: ${caption}
+문제점: ${reason}
+목표 톤: ${tone}
+길이: ${getToneLengthRange(tone).min}~${getToneLengthRange(tone).max}자`,
+      },
+    ],
+    response_format: { type: 'json_object' },
+    temperature: tone === 'CASUAL' ? 0.35 : 0.45,
+  });
+  return parseJsonResult(rewrite.choices[0]?.message?.content);
 }
 
 function parseArgs() {
@@ -177,15 +284,25 @@ async function fetchExamples({ supabase, openai, category, tone, inputText }) {
 }
 
 async function generateByTone({ openai, model, category, tone, content, weather, inventoryStatus, customerReaction, examples }) {
+  const range = getToneLengthRange(tone);
+  const toneRule =
+    tone === 'CASUAL'
+      ? '- 짧은 구어체 2~3문장\n- 공지문체(습니다/입니다) 금지\n- 감성 수식어 남발 금지'
+      : tone === 'EMOTIONAL'
+        ? '- 따뜻한 감정 표현은 1~2회\n- 공지형 단어(안내/운영/예약/문의) 반복 금지\n- 안내문체 종결 최소화'
+        : '- 사실 중심 안내형 3~4문장\n- 과장/권유 문구 금지';
   let systemPrompt = `너는 ${category} 매장 사장님이다.
 톤: ${tone}
 톤 설명: ${TONE_GUIDE[tone]}
 규칙:
-- 100~150자
+- ${range.min}~${range.max}자
 - 광고 과장 문구 금지
 - 실제 매장 상황처럼 자연스럽게 작성
 - 문장 끝맺음 반복 금지
 - 입력 문장을 그대로 복붙하지 말고 의역
+- 하드 금지어: 여러분, 고객님, 오세요, 만나보세요, 지금 바로, 놓치지 마세요, 특별한, 완벽한, 최고의
+- 톤별 강제 규칙:
+${toneRule}
 JSON으로 {"caption":"..."} 만 응답`;
 
   if (examples.length > 0) {
@@ -205,10 +322,83 @@ JSON으로 {"caption":"..."} 만 응답`;
       { role: 'user', content: userPrompt },
     ],
     response_format: { type: 'json_object' },
-    temperature: 0.85,
+    temperature: tone === 'CASUAL' ? 0.68 : tone === 'EMOTIONAL' ? 0.82 : 0.62,
   });
 
-  return parseJsonResult(completion.choices[0]?.message?.content);
+  const candidates = completion.choices
+    .map((choice) => parseJsonResult(choice?.message?.content))
+    .filter(Boolean);
+
+  const safeCandidates = candidates.filter((caption) => !hasHardBlockedPattern(caption));
+  let selected = safeCandidates[0] || candidates[0] || '';
+
+  if (!selected) return '';
+
+  // 1차 후처리: 하드 금지어/길이/톤 불일치 보정
+  const detected = detectToneFromCaption(selected);
+  const needsFirstFix =
+    hasHardBlockedPattern(selected) ||
+    (tone === 'EMOTIONAL' && hasEmotionalBlockedPattern(selected)) ||
+    isLengthOutOfTarget(selected, tone) ||
+    detected !== tone;
+  if (needsFirstFix) {
+    const reason = [];
+    if (hasHardBlockedPattern(selected)) reason.push('하드 금지어');
+    if (tone === 'EMOTIONAL' && hasEmotionalBlockedPattern(selected)) reason.push('감성 금지어');
+    if (isLengthOutOfTarget(selected, tone)) reason.push('길이 이탈');
+    if (detected !== tone) reason.push(`톤 불일치(${detected})`);
+    const rewritten = await rewriteCaption({
+      openai,
+      model,
+      tone,
+      sourceText: userPrompt,
+      caption: selected,
+      reason: reason.join(', '),
+    });
+    if (rewritten) selected = rewritten;
+  }
+
+  if (hasHardBlockedPattern(selected) || (tone === 'EMOTIONAL' && hasEmotionalBlockedPattern(selected))) {
+    const rewritten = await rewriteCaption({
+      openai,
+      model,
+      tone,
+      sourceText: userPrompt,
+      caption: selected,
+      reason: '하드 금지어 잔존',
+    });
+    if (rewritten) selected = rewritten;
+  }
+
+  if (tone === 'CASUAL' && detectToneFromCaption(selected) === 'EMOTIONAL') {
+    const rewritten = await rewriteCaption({
+      openai,
+      model,
+      tone: 'CASUAL',
+      sourceText: userPrompt,
+      caption: selected,
+      reason: 'CASUAL 톤 미충족(EMOTIONAL로 감지됨)',
+    });
+    if (rewritten) selected = rewritten;
+  }
+
+  // 2차 후처리: EMOTIONAL 전용 재보정
+  if (tone === 'EMOTIONAL' && detectToneFromCaption(selected) !== 'EMOTIONAL') {
+    const rewritten = await rewriteCaption({
+      openai,
+      model,
+      tone: 'EMOTIONAL',
+      sourceText: userPrompt,
+      caption: selected,
+      reason: 'EMOTIONAL 톤 미충족',
+    });
+    if (rewritten) selected = rewritten;
+  }
+
+  const sanitized = sanitizeBlockedPhrases(selected, tone);
+  if (sanitized) selected = sanitized;
+
+  return selected;
 }
 
 async function main() {
@@ -279,6 +469,8 @@ async function main() {
           score: score.total,
           detected_tone: score.detectedTone,
           issues: score.issues,
+          length_ok: isLengthOutOfTarget(caption, tone) ? 0 : 1,
+          hard_blocked: hasHardBlockedPattern(caption) || (tone === 'EMOTIONAL' && hasEmotionalBlockedPattern(caption)) ? 1 : 0,
           caption,
           example_count: examples.length,
         });
@@ -293,6 +485,8 @@ async function main() {
           score: 0,
           detected_tone: 'ERROR',
           issues: String(error?.message || error),
+          length_ok: 0,
+          hard_blocked: 0,
           caption: '',
           example_count: 0,
         });
@@ -305,7 +499,7 @@ async function main() {
   const csvPath = path.join(OUTPUT_DIR, `ab_tone_test_results_${stamp}.csv`);
   const summaryPath = path.join(OUTPUT_DIR, `ab_tone_test_summary_${stamp}.md`);
 
-  const headers = ['case_id', 'category', 'tone', 'score', 'detected_tone', 'issues', 'example_count', 'caption'];
+  const headers = ['case_id', 'category', 'tone', 'score', 'detected_tone', 'issues', 'length_ok', 'hard_blocked', 'example_count', 'caption'];
   const lines = [headers.join(',')];
   for (const row of rows) {
     lines.push(headers.map((h) => toCsvValue(row[h])).join(','));

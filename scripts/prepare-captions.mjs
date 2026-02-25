@@ -1,11 +1,17 @@
 import fs from 'fs';
 import path from 'path';
 
-const INPUT_PATH = '/Users/tuesdaymorning/Devguru/sajangnim_insta/data/clean_captions.csv';
-const OUTPUT_PATH = '/Users/tuesdaymorning/Devguru/sajangnim_insta/data/clean_captions_prepared.csv';
-const REJECTED_PATH = '/Users/tuesdaymorning/Devguru/sajangnim_insta/data/clean_captions_rejected.csv';
-const OWNER_OUTPUT_PATH = '/Users/tuesdaymorning/Devguru/sajangnim_insta/data/clean_captions_owner_style.csv';
-const OWNER_STRICT_OUTPUT_PATH = '/Users/tuesdaymorning/Devguru/sajangnim_insta/data/clean_captions_owner_strict.csv';
+const ROOT_DIR = '/Users/tuesdaymorning/Devguru/sajangnim_insta';
+const DATA_DIR = path.join(ROOT_DIR, 'data');
+
+const inputArg = process.env.INPUT_CSV || 'clean_captions.csv';
+const outputPrefixArg = process.env.OUTPUT_PREFIX || 'clean_captions';
+
+const INPUT_PATH = path.isAbsolute(inputArg) ? inputArg : path.join(DATA_DIR, inputArg);
+const OUTPUT_PATH = path.join(DATA_DIR, `${outputPrefixArg}_prepared.csv`);
+const REJECTED_PATH = path.join(DATA_DIR, `${outputPrefixArg}_rejected.csv`);
+const OWNER_OUTPUT_PATH = path.join(DATA_DIR, `${outputPrefixArg}_owner_style.csv`);
+const OWNER_STRICT_OUTPUT_PATH = path.join(DATA_DIR, `${outputPrefixArg}_owner_strict.csv`);
 
 const INDUSTRY_MAP = new Map([
   ['카페', 'CAFE'],
@@ -348,6 +354,7 @@ const industryStats = accepted.reduce((acc, row) => {
 }, {});
 
 console.log('=== Prepare captions done ===');
+console.log('input file:', INPUT_PATH);
 console.log('input rows:', dataRows.length);
 console.log('accepted rows:', accepted.length);
 console.log('owner-style rows:', ownerAccepted.length);
