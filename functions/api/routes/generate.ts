@@ -365,8 +365,8 @@ const scoreGeneratedResult = (
     contexts: string[]
 ): { score: number; issues: string[] } => {
     const caption = result.caption.trim();
-    const issues = getCaptionQualityIssues(caption, normalizedTone);
     const normalizedTone = (tone || '').toUpperCase();
+    const issues = getCaptionQualityIssues(caption, normalizedTone);
 
     const targetLength = 125;
     const lengthScore = Math.max(0, 30 - Math.abs(caption.length - targetLength) * scoringConfig.lengthWeight);
@@ -785,7 +785,7 @@ JSON {"caption":"..."}만 출력.`,
 감성 수식어 과다 사용 금지.
 공지문체(습니다/입니다) 금지.
 금지어: 여러분, 고객님, 오세요, 만나보세요, 지금 바로, 놓치지 마세요, 특별한, 완벽한, 최고의
-길이 90~130자.
+길이 85~125자.
 JSON {"caption":"..."}만 출력.`,
                         },
                         {
