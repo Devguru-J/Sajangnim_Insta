@@ -56,6 +56,8 @@ const HARD_BLOCK_PATTERNS = [
 const EMOTIONAL_EXTRA_BLOCK_PATTERNS = [
     /여러분의/g, /함께하고\s*싶어요/g, /마음을\s*사로잡/g, /소중한\s*순간/g,
     /응원이\s*큰\s*힘/g, /기쁨으로\s*가득/g, /행복한\s*모습/g, /녹여보세요/g, /함께\s*나누/g,
+    /웃음소리로\s*가득/g, /따뜻한\s*에너지/g, /마음이\s*따뜻해집니다/g, /사장님은/g, /사장님이/g,
+    /항상\s*미소/g, /소중히\s*준비/g, /계셔/g,
 ];
 const BLOCKED_PHRASE_REPLACEMENTS: Array<[RegExp, string]> = [
     [/여러분의/g, ''],
@@ -83,6 +85,14 @@ const BLOCKED_PHRASE_REPLACEMENTS: Array<[RegExp, string]> = [
     [/행복한\s*모습/g, '반가운 표정'],
     [/녹여보세요/g, '달래보세요'],
     [/함께\s*나누/g, '전하'],
+    [/웃음소리로\s*가득/g, '분위기가 분주했고'],
+    [/따뜻한\s*에너지/g, '온기'],
+    [/마음이\s*따뜻해집니다/g, '기억에 남아요'],
+    [/사장님은/g, '저는'],
+    [/사장님이/g, '제가'],
+    [/항상\s*미소/g, '분주하게'],
+    [/소중히\s*준비/g, '차분히 준비'],
+    [/계셔/g, '있어요'],
 ];
 const CASUAL_FORBIDDEN_PATTERNS = [
     /안녕하세요/g, /저희/g, /문의/g, /추천/g, /오세요/g, /드셔보세요/g, /방문해/g, /예약/g, /여러분/g, /고객님/g,
@@ -112,6 +122,7 @@ const EXAMPLE_NOISE_PATTERNS = [
 
 const GENERIC_CAPTION_PATTERNS = [
     /좋은\s*하루/g, /기분이\s*좋네요/g, /잘\s*어울리는\s*음료/gi, /상큼하고\s*부드럽/gi, /반응도\s*좋았/gi, /것\s*같아요/g, /입니다\./g,
+    /조화롭게\s*즐기고/g, /긍정적인\s*반응이\s*이어지고\s*있/g, /따뜻한\s*에너지/g, /웃음소리로\s*가득/g,
 ];
 
 type GenerationResult = {
@@ -469,6 +480,8 @@ const scoreGeneratedResult = (
     const emotionalCasualOverflowPenalty =
         normalizedTone === 'EMOTIONAL' && casualSignalHits > emotionalSignalHits ? 6 : 0;
     const professionalSignalWeakPenalty = normalizedTone === 'PROFESSIONAL' && professionalSignalHits < 1 ? 4 : 0;
+    const professionalYoEndingPenalty = normalizedTone === 'PROFESSIONAL' && allYoEndingPenalty > 0 ? 8 : 0;
+    const professionalEmotionalOverflowPenalty = normalizedTone === 'PROFESSIONAL' && emotionalSignalHits >= 2 ? 6 : 0;
     const aiLikePenalty = hasAiLikePattern(caption) ? 8 : 0;
     const promoPenalty = countPatternHits(caption, PROMO_FORBIDDEN_PATTERNS) * 5;
 
@@ -495,6 +508,8 @@ const scoreGeneratedResult = (
         emotionalFormalEndingPenalty -
         emotionalCasualOverflowPenalty -
         professionalSignalWeakPenalty -
+        professionalYoEndingPenalty -
+        professionalEmotionalOverflowPenalty -
         endingMonotonePenalty -
         allYoEndingPenalty -
         aiLikePenalty -
@@ -525,6 +540,8 @@ const getRewriteSystemPrompt = (tone: string): string => {
 원문 사실은 유지하고 감성 톤으로 고친다.
 가게에서 지나간 한 장면을 적듯 3~4문장으로 쓴다.
 장면 1개, 변화 1개, 사장님 느낌 1개를 담고 과장된 위로/권유는 금지한다.
+ "웃음소리로 가득", "따뜻한 에너지", "마음이 따뜻해집니다" 같은 과한 감상문 표현 금지.
+ 자기 자신을 "사장님은/사장님이"처럼 3인칭으로 쓰지 않는다.
 공지형 단어(안내/운영/예약/문의) 반복을 피한다.
 공식문서 종결(습니다/입니다) 최소화.
 "것 같아요", "기분이 좋아요" 같은 템플릿 마무리 금지.
@@ -536,7 +553,8 @@ const getRewriteSystemPrompt = (tone: string): string => {
 원문 사실은 유지하고 전문적 톤으로 고친다.
 공지문이 아니라 운영자가 오늘 변경점과 반응을 브리핑하듯 3문장 안팎으로 작성한다.
 1문장: 조정한 내용, 2문장: 손님 반응/효과, 3문장: 오늘 운영 상황.
-모든 문장을 같은 종결로 반복하지 않는다.
+ "~보였습니다", "많았습니다", "높은 편입니다"처럼 담백한 운영 문장으로 정리한다.
+ 모든 문장을 같은 종결로 반복하지 않고, "~요" 위주의 구어체는 피한다.
 권유형 광고 문구는 제거한다.
 새 사실 추가 금지.
 응답은 JSON {"caption":"..."} 으로만 준다.`;
@@ -651,8 +669,8 @@ export const registerGenerateRoutes = (app: Hono<{ Bindings: Bindings }>) => {
                 normalizedTone === 'CASUAL'
                     ? '- 캐주얼: 오늘 있었던 말을 툭 꺼내듯 2~3문장. 첫 문장은 핵심 변화부터, 둘째 문장은 손님 반응이나 현장 상황. 같은 ~요 어미 반복 금지.'
                     : normalizedTone === 'EMOTIONAL'
-                        ? '- 감성: 가게 일기처럼 장면 1개, 변화 1개, 느낌 1개. 템플릿 감성 문장과 권유 문구 금지.'
-                        : '- 전문: 운영 브리핑처럼 조정 내용, 반응, 오늘 운영 상황을 3문장 안팎으로. 공지문 복붙 같은 딱딱한 문체 금지.';
+                        ? '- 감성: 가게 일기처럼 장면 1개, 변화 1개, 느낌 1개. 템플릿 감성 문장, 과한 위로 문장, 사장님 3인칭 서술 금지.'
+                        : '- 전문: 운영 브리핑처럼 조정 내용, 반응, 오늘 운영 상황을 3문장 안팎으로. 공지문 복붙 같은 딱딱한 문체와 전부 ~요 종결 금지.';
             const targetRange = getToneLengthRange(normalizedTone);
             let systemPrompt = `당신은 동네 ${businessType} 사장님입니다. 인스타에 오늘 이야기를 씁니다.
 
@@ -662,12 +680,15 @@ export const registerGenerateRoutes = (app: Hono<{ Bindings: Bindings }>) => {
 - "여러분", "고객님" (호칭)
 - "요즘 날씨와 잘 어울리는 음료인 것 같아요" 같은 교과서형 마무리
 - "기분이 좋네요", "반응도 좋았어서" 같은 템플릿 문장
+- "웃음소리로 가득", "따뜻한 에너지", "마음이 따뜻해집니다" 같은 과장 감상문
+- 자기 자신을 "사장님은/사장님이"처럼 3인칭으로 서술하는 문장
 
 ## 좋은 예시 (이런 느낌으로):
 - "오늘 우유 비율 다시 잡았어요. 딸기 맛이 더 또렷하게 올라오더라고요. 시음 반응도 괜찮았음"
 - "국물 베이스 다시 만졌더니 짠맛이 좀 눌렸어요. 부드러워졌다는 얘기가 바로 나왔네요"
 - "다운펌 시간 줄였는데 손질 편하다는 말이 제일 먼저 들렸어요. 이런 반응이면 방향은 맞는 것 같아요"
 - "디카페인 원두 바꾸고 나서 향이 한결 부드러워졌어요. 오늘은 이쪽 주문이 꾸준한 편"
+- "당도를 낮추고 우유 비율을 조정했습니다. 시음 반응은 덜 달아서 편하게 마시기 좋다는 쪽이 많았습니다. 오늘은 따뜻한 음료 주문 비중이 높은 편입니다"
 
 ## 포인트:
 - ${targetRange.min}-${targetRange.max}자 정도로 성의있게
@@ -786,6 +807,7 @@ ${toneRule}
                 hasAiLikePattern(result.caption || '') ||
                 hasHardBlockedPattern(result.caption || '') ||
                 (normalizedTone === 'EMOTIONAL' && hasEmotionalBlockedPattern(result.caption || '')) ||
+                (normalizedTone === 'PROFESSIONAL' && hasExcessiveYoEnding(result.caption || '')) ||
                 isLengthOutOfTarget(result.caption || '', normalizedTone) ||
                 casualForbiddenRemaining;
 
@@ -802,6 +824,8 @@ ${toneRule}
 금지어 추가: 특별한, 완벽한, 최고의
 CASUAL이면 금지어 추가: 안녕하세요, 저희, 문의, 추천, 예약
 EMOTIONAL이면 안내문/공지문 스타일 금지
+ EMOTIONAL이면 자기 자신을 사장님 3인칭으로 쓰지 않는다.
+ PROFESSIONAL이면 "~요" 위주의 구어체를 피하고 운영 브리핑처럼 쓴다.
 새 사실 추가 금지. 입력 사실만 사용.
 CASUAL: 2~3문장 / EMOTIONAL, PROFESSIONAL: 3~4문장
 길이 ${targetRange.min}~${targetRange.max}자.
@@ -865,8 +889,9 @@ JSON {"caption":"..."}만 출력.`,
 짧은 구어체 2~3문장.
 감성 수식어 과다 사용 금지.
 공지문체(습니다/입니다) 금지.
+ 모든 문장을 같은 ~요로 끝내지 않는다.
 금지어: 여러분, 고객님, 오세요, 만나보세요, 지금 바로, 놓치지 마세요, 특별한, 완벽한, 최고의
-길이 85~125자.
+길이 85~135자.
 JSON {"caption":"..."}만 출력.`,
                         },
                         {
@@ -894,6 +919,7 @@ JSON {"caption":"..."}만 출력.`,
 원문 사실만 유지하면서 EMOTIONAL 톤으로만 다시 쓴다.
 공지문체(안내/운영/예약/문의, ~습니다/~입니다) 금지.
 캐주얼 과다 구어체(ㅋㅋ, 과한 반말, 과도한 느낌표) 금지.
+ 자기 자신을 사장님 3인칭으로 쓰지 않는다.
 금지어: 여러분, 고객님, 오세요, 만나보세요, 지금 바로, 놓치지 마세요, 특별한, 완벽한, 최고의
 3~4문장, 110~150자.
 JSON {"caption":"..."}만 출력.`,
