@@ -15,7 +15,7 @@ const TONE_GUIDE = {
   PROFESSIONAL: '차분하고 신뢰감 있는 안내형 톤, 과장 금지',
 };
 const TONE_LENGTH_RANGE = {
-  CASUAL: { min: 85, max: 125 },
+  CASUAL: { min: 85, max: 135 },
   EMOTIONAL: { min: 110, max: 150 },
   PROFESSIONAL: { min: 110, max: 150 },
 };
@@ -28,6 +28,34 @@ const HARD_BLOCK_PATTERNS = [
 ];
 const EMOTIONAL_EXTRA_BLOCK_PATTERNS = [
   /여러분의/g, /함께하고\s*싶어요/g, /마음을\s*사로잡/g, /소중한\s*순간/g,
+  /응원이\s*큰\s*힘/g, /기쁨으로\s*가득/g, /행복한\s*모습/g, /녹여보세요/g, /함께\s*나누/g,
+];
+const BLOCKED_PHRASE_REPLACEMENTS = [
+  [/여러분의/g, ''],
+  [/여러분을/g, ''],
+  [/여러분/g, ''],
+  [/고객님들께서/g, '손님들께서'],
+  [/고객님들/g, '손님들'],
+  [/고객님께서/g, '손님께서'],
+  [/고객님께/g, '손님께'],
+  [/고객님이/g, '손님이'],
+  [/고객님은/g, '손님은'],
+  [/고객님/g, '손님'],
+  [/오세요/g, '들러도 좋아요'],
+  [/만나보세요/g, '느껴보실 수 있어요'],
+  [/지금\s*바로/g, '지금'],
+  [/놓치지\s*마세요/g, '눈여겨봐 주세요'],
+  [/특별한/g, '은은한'],
+  [/완벽한/g, '균형 잡힌'],
+  [/최고의/g, '만족스러운'],
+  [/함께하고\s*싶어요/g, '전하고 싶어요'],
+  [/마음을\s*사로잡/g, '눈길을 끌'],
+  [/소중한\s*순간/g, '오늘'],
+  [/응원이\s*큰\s*힘/g, '반응이 오래 남아요'],
+  [/기쁨으로\s*가득/g, '따뜻한 여운으로'],
+  [/행복한\s*모습/g, '반가운 표정'],
+  [/녹여보세요/g, '달래보세요'],
+  [/함께\s*나누/g, '전하'],
 ];
 const CASUAL_SIGNAL_PATTERNS = [
   /요즘/g, /오늘/g, /근데/g, /살짝/g, /딱/g, /은근/g, /확실히/g, /하게\s*되/g, /더라구요/g, /했더니/g,
@@ -74,15 +102,28 @@ function hasEmotionalBlockedPattern(text) {
 }
 
 function sanitizeBlockedPhrases(text, tone) {
-  const patterns = [...HARD_BLOCK_PATTERNS];
-  if (tone === 'EMOTIONAL') patterns.push(...EMOTIONAL_EXTRA_BLOCK_PATTERNS);
   let out = String(text || '');
-  for (const pattern of patterns) out = out.replace(pattern, '');
+  for (const [pattern, replacement] of BLOCKED_PHRASE_REPLACEMENTS) {
+    if (tone !== 'EMOTIONAL' && EMOTIONAL_EXTRA_BLOCK_PATTERNS.some((emotionalPattern) => emotionalPattern.source === pattern.source)) {
+      continue;
+    }
+    out = out.replace(pattern, replacement);
+  }
   return out
+    .replace(/(^|\s)([이가을를은는와과도만에의])( ?)(?=[,.!?]|$)/g, '$1')
+    .replace(/\b(그리고|하지만|또)\s*(?=[,.!?]|$)/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([,.!?])/g, '$1')
+    .replace(/([,.!?])\s*([,.!?])/g, '$1')
     .replace(/\s{2,}/g, ' ')
     .replace(/\s+([,.!?])/g, '$1')
     .replace(/([,.!?]){2,}/g, '$1')
     .trim();
+}
+
+function hasBrokenCaptionPattern(text) {
+  return /(^|\s)([이가을를은는와과도만에의])( ?)(?=[,.!?]|$)/.test(String(text || ''))
+    || /오늘들이|들을 함께|이들의 고|수가 을|가 을|를 을/.test(String(text || ''));
 }
 
 function getToneLengthRange(tone) {
@@ -231,6 +272,34 @@ async function rewriteCaption({ openai, model, tone, sourceText, caption, reason
     ],
     response_format: { type: 'json_object' },
     temperature: tone === 'CASUAL' ? 0.35 : 0.45,
+  });
+  return parseJsonResult(rewrite.choices[0]?.message?.content);
+}
+
+async function polishCaption({ openai, model, tone, sourceText, caption }) {
+  const range = getToneLengthRange(tone);
+  const rewrite = await openai.chat.completions.create({
+    model,
+    messages: [
+      {
+        role: 'system',
+        content: `너는 한국어 인스타 캡션 문장 교정자다.
+원문 사실은 유지하고 문장만 자연스럽게 다듬는다.
+어색한 조사, 잘린 표현, 기계적인 치환 흔적을 없앤다.
+금지어는 다시 넣지 않는다.
+새 사실 추가 금지.
+길이는 ${range.min}~${range.max}자.
+JSON {"caption":"..."}만 출력.`,
+      },
+      {
+        role: 'user',
+        content: `목표 톤: ${tone}
+다듬을 캡션: ${caption}
+입력 정보: ${sourceText}`,
+      },
+    ],
+    response_format: { type: 'json_object' },
+    temperature: 0.3,
   });
   return parseJsonResult(rewrite.choices[0]?.message?.content);
 }
@@ -396,7 +465,18 @@ JSON으로 {"caption":"..."} 만 응답`;
   }
 
   const sanitized = sanitizeBlockedPhrases(selected, tone);
+  const changedBySanitize = Boolean(sanitized && sanitized !== selected);
   if (sanitized) selected = sanitized;
+  if (selected && (changedBySanitize || hasBrokenCaptionPattern(selected) || isLengthOutOfTarget(selected, tone))) {
+    const polished = await polishCaption({
+      openai,
+      model,
+      tone,
+      sourceText: userPrompt,
+      caption: selected,
+    });
+    if (polished) selected = polished;
+  }
 
   return selected;
 }
