@@ -10,9 +10,9 @@ const OUTPUT_DIR = path.join(ROOT, 'data');
 
 const TONES = ['EMOTIONAL', 'CASUAL', 'PROFESSIONAL'];
 const TONE_GUIDE = {
-  EMOTIONAL: '감정과 분위기를 담되 과장하지 않는 따뜻한 일상 톤',
-  CASUAL: '친한 단골에게 말하듯 편하고 자연스러운 구어체 톤',
-  PROFESSIONAL: '차분하고 신뢰감 있는 안내형 톤, 과장 금지',
+  EMOTIONAL: '가게 일기를 쓰듯 잔잔하게, 장면과 감정을 한 번씩만 담는 톤',
+  CASUAL: '사장님이 오늘 있었던 일을 편하게 툭 말하는 구어체 톤',
+  PROFESSIONAL: '운영자가 오늘 변경점과 반응을 간단히 브리핑하는 톤',
 };
 const TONE_LENGTH_RANGE = {
   CASUAL: { min: 85, max: 135 },
@@ -65,6 +65,11 @@ const EMOTIONAL_SIGNAL_PATTERNS = [
 ];
 const GENERIC_CAPTION_PATTERNS = [
   /좋은\s*하루/g, /기분이\s*좋네요/g, /잘\s*어울리는\s*음료/gi, /상큼하고\s*부드럽/gi, /반응도\s*좋았/gi, /것\s*같아요/g, /입니다\./g,
+];
+
+const PROFESSIONAL_SIGNAL_PATTERNS = [
+  /안내/g, /운영/g, /예약/g, /공지/g, /문의/g, /고객님/g, /저희/g, /습니다/g, /입니다/g,
+  /조정/g, /비율/g, /반응/g, /주문/g, /수요/g, /위주/g, /기준/g, /확인/g, /준비/g, /구성/g,
 ];
 
 function loadEnvFile(filePath) {
@@ -136,6 +141,32 @@ function isLengthOutOfTarget(text, tone = 'CASUAL') {
   return len < range.min || len > range.max;
 }
 
+function splitCaptionSentences(text) {
+  return String(text || '').split(/(?<=[.!?])\s+|\n+/).map((part) => part.trim()).filter(Boolean);
+}
+
+function getSentenceEndingClass(sentence) {
+  const trimmed = String(sentence || '').replace(/[.!?~]+$/g, '').trim();
+  if (!trimmed) return 'empty';
+  if (/(습니다|입니다)$/.test(trimmed)) return 'formal';
+  if (/(더라고요|더라구요)$/.test(trimmed)) return 'conversational';
+  if (/(했음|였음|많음|적음|보임|느낌)$/.test(trimmed)) return 'note';
+  if (/(어요|아요|예요|네요|해요|이에요|거예요)$/.test(trimmed)) return 'yo';
+  if (/(했다|된다|좋다|있다|없다)$/.test(trimmed)) return 'plain';
+  return trimmed.slice(-2);
+}
+
+function hasMonotoneEnding(text) {
+  const endings = splitCaptionSentences(text).map(getSentenceEndingClass).filter((v) => v !== 'empty');
+  return endings.length >= 3 && new Set(endings).size === 1;
+}
+
+function hasExcessiveYoEnding(text) {
+  const sentences = splitCaptionSentences(text);
+  if (sentences.length < 3) return false;
+  return sentences.every((sentence) => /(어요|아요|예요|네요|해요|이에요|거예요)$/.test(sentence.replace(/[.!?~]+$/g, '').trim()));
+}
+
 function detectToneFromCaption(caption) {
   const text = String(caption || '').toLowerCase();
   const emotionalScore = EMOTIONAL_SIGNAL_PATTERNS.reduce((sum, regex) => sum + ((text.match(regex) || []).length), 0);
@@ -144,7 +175,7 @@ function detectToneFromCaption(caption) {
     (text.match(/~|!{2,}/g) || []).length +
     CASUAL_SIGNAL_PATTERNS.reduce((sum, regex) => sum + ((text.match(regex) || []).length), 0);
   const professionalScore =
-    (text.match(/안내|운영|예약|공지|준비했습니다|제공됩니다|가능합니다|권장드립니다|추천드립니다|품절|오픈|마감/g) || []).length +
+    (text.match(/안내|운영|예약|공지|준비했습니다|제공됩니다|가능합니다|권장드립니다|추천드립니다|품절|오픈|마감|조정|비율|반응|주문|수요|위주|기준|확인|준비|구성/g) || []).length +
     (text.match(/습니다|입니다/g) || []).length;
 
   if (professionalScore >= 2 && professionalScore >= casualScore + 1 && professionalScore >= emotionalScore + 1) return 'PROFESSIONAL';
@@ -171,6 +202,7 @@ function getCaptionIssues(caption, tone = 'CASUAL') {
 
   const exclamationCount = (trimmed.match(/!/g) || []).length;
   if (exclamationCount >= 3) issues.push('too_many_exclamation');
+  if (hasMonotoneEnding(trimmed) || hasExcessiveYoEnding(trimmed)) issues.push('ending_monotone');
 
   return issues;
 }
@@ -229,7 +261,9 @@ function getRewriteSystemPrompt(tone) {
   if (tone === 'CASUAL') {
     return `너는 인스타 캡션 문장 교정자다.
 원문 사실은 유지하고 톤만 캐주얼로 고친다.
-짧은 문장 2~3개로 자연스럽게 작성한다.
+사장님이 오늘 있었던 일을 직접 말하듯 2~3문장으로 작성한다.
+첫 문장은 바뀐 점이나 핵심 포인트부터, 둘째 문장은 손님 반응이나 현장 상황을 붙인다.
+모든 문장을 같은 ~요 어미로 끝내지 않는다.
 공지문체 종결(습니다/입니다) 금지.
 금지어: 안녕하세요, 저희, 여러분, 고객님, 추천, 문의, 예약, 오세요, 만나보세요, 드셔보세요, 지금 바로, 놓치지 마세요, 특별한, 완벽한, 최고의
 새 사실 추가 금지.
@@ -239,8 +273,10 @@ function getRewriteSystemPrompt(tone) {
   if (tone === 'EMOTIONAL') {
     return `너는 인스타 캡션 문장 교정자다.
 원문 사실은 유지하고 감성 톤으로 고친다.
-따뜻한 뉘앙스는 유지하되 안내문/공지문 말투는 금지한다.
+가게에서 지나간 한 장면을 적듯 3~4문장으로 쓴다.
+장면 1개, 변화 1개, 사장님 느낌 1개를 담고 과장된 위로/권유는 금지한다.
 공지형 단어(안내/운영/예약/문의) 반복 금지.
+"것 같아요", "기분이 좋아요" 같은 템플릿 마무리 금지.
 금지어: 안녕하세요, 저희, 여러분, 고객님, 문의, 예약, 오세요, 만나보세요, 지금 바로, 놓치지 마세요, 특별한, 완벽한, 최고의
 새 사실 추가 금지.
 길이 ${range.min}~${range.max}자.
@@ -248,7 +284,9 @@ function getRewriteSystemPrompt(tone) {
   }
   return `너는 인스타 캡션 문장 교정자다.
 원문 사실은 유지하고 전문적 톤으로 고친다.
-명확하고 담백한 안내형 문장으로 작성한다.
+공지문이 아니라 운영자가 오늘 변경점과 반응을 브리핑하듯 3문장 안팎으로 작성한다.
+1문장: 조정한 내용, 2문장: 손님 반응/효과, 3문장: 오늘 운영 상황.
+모든 문장을 같은 종결로 반복하지 않는다.
 권유형 광고 문구는 제거한다.
 금지어: 여러분, 고객님, 오세요, 만나보세요, 지금 바로, 놓치지 마세요, 특별한, 완벽한, 최고의
 새 사실 추가 금지.
@@ -356,10 +394,10 @@ async function generateByTone({ openai, model, category, tone, content, weather,
   const range = getToneLengthRange(tone);
   const toneRule =
     tone === 'CASUAL'
-      ? '- 짧은 구어체 2~3문장\n- 공지문체(습니다/입니다) 금지\n- 감성 수식어 남발 금지'
+      ? '- 2~3문장 구어체\n- 첫 문장은 핵심 변화부터, 둘째 문장은 손님 반응/현장 상황\n- 같은 ~요 어미 반복 금지'
       : tone === 'EMOTIONAL'
-        ? '- 따뜻한 감정 표현은 1~2회\n- 공지형 단어(안내/운영/예약/문의) 반복 금지\n- 안내문체 종결 최소화'
-        : '- 사실 중심 안내형 3~4문장\n- 과장/권유 문구 금지';
+        ? '- 장면 1개, 변화 1개, 느낌 1개\n- 템플릿 감성 문장과 권유 문구 금지\n- 안내문체 종결 최소화'
+        : '- 운영 브리핑 3문장 안팎\n- 조정 내용, 반응, 운영 상황 순서\n- 같은 종결 반복 금지';
   let systemPrompt = `너는 ${category} 매장 사장님이다.
 톤: ${tone}
 톤 설명: ${TONE_GUIDE[tone]}
@@ -368,6 +406,7 @@ async function generateByTone({ openai, model, category, tone, content, weather,
 - 광고 과장 문구 금지
 - 실제 매장 상황처럼 자연스럽게 작성
 - 문장 끝맺음 반복 금지
+- 같은 ~요 어미나 ~습니다 종결만 이어서 쓰지 않기
 - 입력 문장을 그대로 복붙하지 말고 의역
 - 하드 금지어: 여러분, 고객님, 오세요, 만나보세요, 지금 바로, 놓치지 마세요, 특별한, 완벽한, 최고의
 - 톤별 강제 규칙:

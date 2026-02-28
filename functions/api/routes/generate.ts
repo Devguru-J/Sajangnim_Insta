@@ -12,25 +12,28 @@ const BUSINESS_TYPE_TO_CATEGORY: Record<string, string> = {
 };
 
 const TONE_GUIDE: Record<string, string> = {
-    EMOTIONAL: '감정과 분위기를 담되 오글거리지 않게, 잔잔한 일상 톤',
-    CASUAL: '친한 단골에게 말하듯 편한 말투, 짧고 리듬감 있게',
-    PROFESSIONAL: '차분하고 신뢰감 있는 설명형 말투, 과장 금지',
+    EMOTIONAL: '가게 일기를 쓰듯 잔잔하게, 장면과 감정을 한 번씩만 담는 톤',
+    CASUAL: '사장님이 오늘 있었던 일을 편하게 툭 말하는 구어체 톤',
+    PROFESSIONAL: '운영자가 오늘 변경점과 반응을 간단히 브리핑하는 톤',
 };
 
 const TONE_RULES: Record<string, string> = {
-    EMOTIONAL: `- 감정 단어는 자연스럽게 1~2회만 사용
+    EMOTIONAL: `- 가게 일기처럼 3~4문장으로 작성
+- 1문장은 오늘 장면, 1문장은 메뉴/시술 변화, 1문장은 사장님 느낌으로 구성
+- 감정 단어는 자연스럽게 1~2회만 사용
 - 이모지는 최대 2개
-- 따뜻한 여운은 남기되 과장 금지
-- 안내문 말투 금지 ("안녕하세요", "저희", "문의", "예약", "고객님")
-- "안내/운영/예약" 같은 공지형 단어 반복 금지`,
-    CASUAL: `- 대화하듯 짧은 문장 2~3개로 작성
-- "안녕하세요", "저희", "문의", "추천", "오세요" 같은 안내문 말투 금지
-- 과도한 감성 단어(행복/포근/설렘) 반복 금지
-- 권유형 문장 금지 ("와보세요", "드셔보세요", "놓치지 마세요")
-- 공지문체 종결(습니다/입니다) 최소화`,
-    PROFESSIONAL: `- 안내문처럼 명확하고 담백하게 작성
-- 감탄사/이모지 최소화(0~1개)
-- 권유형 광고 문구 금지, 사실 중심 표현`,
+- "소중한", "특별한", "함께" 같은 과장 감성어 반복 금지
+- 권유형 문장과 안내문 말투 금지`,
+    CASUAL: `- 친한 단골에게 말하듯 2~3문장으로 작성
+- 첫 문장은 오늘 바뀐 점이나 바로 느껴지는 포인트부터 시작
+- 둘째 문장은 손님 반응이나 가게 상황을 짧게 덧붙이기
+- 모든 문장을 같은 어미(~요/~네요)로 끝내지 말기
+- 공지문체와 과한 감성어, 권유형 문장 금지`,
+    PROFESSIONAL: `- 운영 브리핑처럼 3문장 안팎으로 작성
+- 1문장: 무엇을 조정했는지, 2문장: 손님 반응이나 변화, 3문장: 오늘 운영 상황
+- 딱딱한 공지문이 아니라 차분한 설명문으로 작성
+- 모든 문장을 같은 종결(습니다/입니다)로 반복하지 말기
+- 과장, 이모지, 권유 문구 금지`,
 };
 
 const TONE_TEMPERATURE: Record<string, number> = {
@@ -86,6 +89,7 @@ const CASUAL_FORBIDDEN_PATTERNS = [
 ];
 const PROFESSIONAL_SIGNAL_PATTERNS = [
     /안내/g, /운영/g, /예약/g, /공지/g, /문의/g, /고객님/g, /저희/g, /습니다/g, /입니다/g,
+    /조정/g, /비율/g, /반응/g, /주문/g, /수요/g, /위주/g, /기준/g, /확인/g, /준비/g, /구성/g,
 ];
 const CASUAL_SIGNAL_PATTERNS = [
     /요즘/g, /오늘/g, /근데/g, /살짝/g, /딱/g, /은근/g, /확실히/g, /하게\s*되/g, /더라구요/g, /했더니/g,
@@ -95,6 +99,7 @@ const EMOTIONAL_SIGNAL_PATTERNS = [
     /[💛🧡❤️✨🌿☕️🍓]/g,
 ];
 const FORMAL_ENDING_PATTERNS = [/습니다/g, /입니다/g];
+const YO_ENDING_PATTERNS = [/(어요|아요|예요|네요|해요|이에요|거예요)$/];
 const PROMO_FORBIDDEN_PATTERNS = [
     /오세요/g, /만나보세요/g, /드셔보세요/g, /방문해보세요/g, /놓치지\s*마세요/g, /지금\s*바로/g, /추천드립니다/g,
 ];
@@ -208,10 +213,13 @@ const getCaptionQualityIssues = (caption: string, tone: string = 'CASUAL'): stri
     const genericHits = GENERIC_CAPTION_PATTERNS.reduce((count, regex) => count + ((trimmed.match(regex) || []).length), 0);
     if (genericHits > 0) issues.push('뻔하거나 템플릿 같은 표현이 포함되어 있다.');
 
-    const sentenceEndings = trimmed.split(/[.!?]/).map((s) => s.trim()).filter(Boolean);
-    const formalEndingCount = sentenceEndings.filter((s) => /(습니다|했어요|예요|입니다|네요)$/.test(s)).length;
+    const sentenceEndings = splitCaptionSentences(trimmed);
+    const formalEndingCount = sentenceEndings.filter((s) => /(습니다|했어요|예요|입니다|네요)$/.test(s.replace(/[.!?~]+$/g, '').trim())).length;
     if (sentenceEndings.length >= 3 && formalEndingCount === sentenceEndings.length) {
         issues.push('문장 끝맺음이 너무 비슷해 기계적으로 들린다.');
+    }
+    if (hasMonotoneEnding(trimmed) || hasExcessiveYoEnding(trimmed)) {
+        issues.push('문장 종결 리듬이 단조롭다.');
     }
 
     return issues;
@@ -253,6 +261,34 @@ const sanitizeBlockedPhrases = (text: string, tone: string): string => {
 const hasBrokenCaptionPattern = (text: string): boolean =>
     /(^|\s)([이가을를은는와과도만에의])( ?)(?=[,.!?]|$)/.test(text) ||
     /오늘들이|들을 함께|이들의 고|수가 을|가 을|를 을/.test(text);
+
+const splitCaptionSentences = (text: string): string[] =>
+    text
+        .split(/(?<=[.!?])\s+|\n+/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+
+const getSentenceEndingClass = (sentence: string): string => {
+    const trimmed = sentence.replace(/[.!?~]+$/g, '').trim();
+    if (!trimmed) return 'empty';
+    if (/(습니다|입니다)$/.test(trimmed)) return 'formal';
+    if (/(더라고요|더라구요)$/.test(trimmed)) return 'conversational';
+    if (/(했음|였음|많음|적음|보임|느낌)$/.test(trimmed)) return 'note';
+    if (/(어요|아요|예요|네요|해요|이에요|거예요)$/.test(trimmed)) return 'yo';
+    if (/(했다|된다|좋다|있다|없다)$/.test(trimmed)) return 'plain';
+    return trimmed.slice(-2);
+};
+
+const hasMonotoneEnding = (text: string): boolean => {
+    const endings = splitCaptionSentences(text).map(getSentenceEndingClass).filter((v) => v !== 'empty');
+    return endings.length >= 3 && new Set(endings).size === 1;
+};
+
+const hasExcessiveYoEnding = (text: string): boolean => {
+    const sentences = splitCaptionSentences(text);
+    if (sentences.length < 3) return false;
+    return sentences.every((sentence) => YO_ENDING_PATTERNS.some((pattern) => pattern.test(sentence.replace(/[.!?~]+$/g, '').trim())));
+};
 
 const isLengthOutOfTarget = (text: string, tone: string = 'CASUAL'): boolean => {
     const range = getToneLengthRange(tone);
@@ -423,6 +459,8 @@ const scoreGeneratedResult = (
     const emotionalSignalHits = countPatternHits(caption, EMOTIONAL_SIGNAL_PATTERNS);
     const formalEndingHits = countPatternHits(caption, FORMAL_ENDING_PATTERNS);
     const professionalSignalHits = countPatternHits(caption, PROFESSIONAL_SIGNAL_PATTERNS);
+    const endingMonotonePenalty = hasMonotoneEnding(caption) ? 6 : 0;
+    const allYoEndingPenalty = hasExcessiveYoEnding(caption) ? 6 : 0;
     const casualSignalWeakPenalty = normalizedTone === 'CASUAL' && casualSignalHits === 0 ? 6 : 0;
     const casualEmotionalOverflowPenalty = normalizedTone === 'CASUAL' && emotionalSignalHits >= 2 ? 4 : 0;
     const casualFormalEndingPenalty = normalizedTone === 'CASUAL' && formalEndingHits >= 2 ? 4 : 0;
@@ -457,6 +495,8 @@ const scoreGeneratedResult = (
         emotionalFormalEndingPenalty -
         emotionalCasualOverflowPenalty -
         professionalSignalWeakPenalty -
+        endingMonotonePenalty -
+        allYoEndingPenalty -
         aiLikePenalty -
         promoPenalty -
         exclamationPenalty -
@@ -471,7 +511,9 @@ const getRewriteSystemPrompt = (tone: string): string => {
     if (normalizedTone === 'CASUAL') {
         return `너는 인스타 캡션 문장 교정자다.
 원문 사실은 유지하고 톤만 캐주얼로 고친다.
-짧은 문장 2~3개로 자연스럽게 작성한다.
+사장님이 오늘 있었던 일을 직접 말하듯 2~3문장으로 작성한다.
+첫 문장은 바뀐 점이나 핵심 포인트부터, 둘째 문장은 손님 반응이나 현장 상황을 붙인다.
+모든 문장을 같은 ~요 어미로 끝내지 않는다.
 감성 단어(포근, 설렘, 행복, 여유) 남발 금지.
 공지문체 종결(습니다/입니다) 금지.
 금지어: 안녕하세요, 저희, 여러분, 고객님, 추천, 문의, 예약, 오세요, 만나보세요, 드셔보세요
@@ -481,16 +523,20 @@ const getRewriteSystemPrompt = (tone: string): string => {
     if (normalizedTone === 'EMOTIONAL') {
         return `너는 인스타 캡션 문장 교정자다.
 원문 사실은 유지하고 감성 톤으로 고친다.
-따뜻한 뉘앙스는 유지하되 안내문/공지문 말투는 금지한다.
+가게에서 지나간 한 장면을 적듯 3~4문장으로 쓴다.
+장면 1개, 변화 1개, 사장님 느낌 1개를 담고 과장된 위로/권유는 금지한다.
 공지형 단어(안내/운영/예약/문의) 반복을 피한다.
 공식문서 종결(습니다/입니다) 최소화.
+"것 같아요", "기분이 좋아요" 같은 템플릿 마무리 금지.
 금지어: 안녕하세요, 저희, 고객님, 문의, 예약
 새 사실 추가 금지.
 응답은 JSON {"caption":"..."} 으로만 준다.`;
     }
     return `너는 인스타 캡션 문장 교정자다.
 원문 사실은 유지하고 전문적 톤으로 고친다.
-명확하고 담백한 안내형 문장으로 작성한다.
+공지문이 아니라 운영자가 오늘 변경점과 반응을 브리핑하듯 3문장 안팎으로 작성한다.
+1문장: 조정한 내용, 2문장: 손님 반응/효과, 3문장: 오늘 운영 상황.
+모든 문장을 같은 종결로 반복하지 않는다.
 권유형 광고 문구는 제거한다.
 새 사실 추가 금지.
 응답은 JSON {"caption":"..."} 으로만 준다.`;
@@ -603,10 +649,10 @@ export const registerGenerateRoutes = (app: Hono<{ Bindings: Bindings }>) => {
             const generationTemperature = TONE_TEMPERATURE[normalizedTone] ?? 0.8;
             const toneSpecificRule =
                 normalizedTone === 'CASUAL'
-                    ? '- 캐주얼: 말하듯 짧은 문장 2~3개. 감성 수식어 남발 금지. 공지문체(습니다/입니다) 금지.'
+                    ? '- 캐주얼: 오늘 있었던 말을 툭 꺼내듯 2~3문장. 첫 문장은 핵심 변화부터, 둘째 문장은 손님 반응이나 현장 상황. 같은 ~요 어미 반복 금지.'
                     : normalizedTone === 'EMOTIONAL'
-                        ? '- 감성: 따뜻한 뉘앙스 1~2포인트만. 공지/운영 안내 단어 반복 금지.'
-                        : '- 전문: 차분한 안내형 3~4문장. 과장·권유 멘트 금지.';
+                        ? '- 감성: 가게 일기처럼 장면 1개, 변화 1개, 느낌 1개. 템플릿 감성 문장과 권유 문구 금지.'
+                        : '- 전문: 운영 브리핑처럼 조정 내용, 반응, 오늘 운영 상황을 3문장 안팎으로. 공지문 복붙 같은 딱딱한 문체 금지.';
             const targetRange = getToneLengthRange(normalizedTone);
             let systemPrompt = `당신은 동네 ${businessType} 사장님입니다. 인스타에 오늘 이야기를 씁니다.
 
@@ -618,10 +664,10 @@ export const registerGenerateRoutes = (app: Hono<{ Bindings: Bindings }>) => {
 - "기분이 좋네요", "반응도 좋았어서" 같은 템플릿 문장
 
 ## 좋은 예시 (이런 느낌으로):
-- "가격대는 살짝 있는 편인데 맛보면 진짜 맛있음. 이건 자신있어요"
-- "오늘 처음 만들어봤는데 생각보다 반응이 좋아서 기분 좋네요"
-- "날씨가 추워서 따뜻한 음료가 잘 나가는 날. 딸기라떼도 준비해뒀어요"
-- "새로 넣어본 메뉴인데 색감이 너무 예뻐서 자꾸 보게 됨"
+- "오늘 우유 비율 다시 잡았어요. 딸기 맛이 더 또렷하게 올라오더라고요. 시음 반응도 괜찮았음"
+- "국물 베이스 다시 만졌더니 짠맛이 좀 눌렸어요. 부드러워졌다는 얘기가 바로 나왔네요"
+- "다운펌 시간 줄였는데 손질 편하다는 말이 제일 먼저 들렸어요. 이런 반응이면 방향은 맞는 것 같아요"
+- "디카페인 원두 바꾸고 나서 향이 한결 부드러워졌어요. 오늘은 이쪽 주문이 꾸준한 편"
 
 ## 포인트:
 - ${targetRange.min}-${targetRange.max}자 정도로 성의있게
@@ -631,7 +677,7 @@ export const registerGenerateRoutes = (app: Hono<{ Bindings: Bindings }>) => {
 - 톤 가이드: ${toneGuide}
 - 톤 강제 규칙:
 ${toneRule}
-- 3~4문장일 때 문장 끝맺음을 다양하게 (예: "~했어요 / ~더라고요 / ~네요" 반복 금지)
+- 문장 끝맺음을 다양하게 (예: "~했어요 / ~더라고요 / ~네요" 반복 금지)
 - 최소 1문장은 실제 현장 디테일(주문 반응, 준비 과정, 재고/날씨 중 1개)을 넣기
 - 입력된 "오늘 상황" 문장을 그대로 복사하지 말고 반드시 자연스럽게 의역해서 녹이기
 - 길이는 반드시 ${targetRange.min}~${targetRange.max}자 범위
