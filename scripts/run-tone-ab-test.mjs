@@ -26,6 +26,10 @@ const AI_LIKE_PATTERNS = [
 const HARD_BLOCK_PATTERNS = [
   /여러분/g, /고객님/g, /오세요/g, /만나보세요/g, /지금\s*바로/g, /놓치지\s*마세요/g, /특별한/g, /완벽한/g, /최고의/g,
 ];
+const REPORTING_VOICE_PATTERNS = [
+  /사장님은/g, /사장님이/g, /원활한\s*운영/g, /운영이\s*이루어지고/g, /방문이\s*예상/g,
+  /혜택이\s*전해지길/g, /소망합니다/g, /많은\s*분들이\s*관심/g, /현재\s*운영\s*상황/g,
+];
 const EMOTIONAL_EXTRA_BLOCK_PATTERNS = [
   /여러분의/g, /함께하고\s*싶어요/g, /마음을\s*사로잡/g, /소중한\s*순간/g,
   /응원이\s*큰\s*힘/g, /기쁨으로\s*가득/g, /행복한\s*모습/g, /녹여보세요/g, /함께\s*나누/g,
@@ -77,6 +81,9 @@ const GENERIC_CAPTION_PATTERNS = [
   /좋은\s*하루/g, /기분이\s*좋네요/g, /잘\s*어울리는\s*음료/gi, /상큼하고\s*부드럽/gi, /반응도\s*좋았/gi, /것\s*같아요/g, /입니다\./g,
   /조화롭게\s*즐기고/g, /긍정적인\s*반응이\s*이어지고\s*있/g, /따뜻한\s*에너지/g, /웃음소리로\s*가득/g,
 ];
+const DETAIL_WEAK_PATTERNS = [
+  /반응이\s*좋/g, /관심을\s*보이/g, /보람찬\s*하루/g, /하루였다/g, /많이\s*찾/g,
+];
 
 const PROFESSIONAL_SIGNAL_PATTERNS = [
   /안내/g, /운영/g, /예약/g, /공지/g, /문의/g, /고객님/g, /저희/g, /습니다/g, /입니다/g,
@@ -110,6 +117,11 @@ function normalizeForComparison(text) {
 function hasHardBlockedPattern(text) {
   const t = String(text || '');
   return HARD_BLOCK_PATTERNS.reduce((sum, regex) => sum + ((t.match(regex) || []).length), 0) > 0;
+}
+
+function hasReportingVoicePattern(text) {
+  const t = String(text || '');
+  return REPORTING_VOICE_PATTERNS.reduce((sum, regex) => sum + ((t.match(regex) || []).length), 0) > 0;
 }
 
 function hasEmotionalBlockedPattern(text) {
@@ -178,6 +190,20 @@ function hasExcessiveYoEnding(text) {
   return sentences.every((sentence) => /(어요|아요|예요|네요|해요|이에요|거예요)$/.test(sentence.replace(/[.!?~]+$/g, '').trim()));
 }
 
+function hasWeakOwnerVoice(text) {
+  const t = String(text || '');
+  const ownerHits = (t.match(/오늘|저희|우리|준비|만들|구웠|조정|바꿨|줄였|다시\s*잡|손님|주문|매장|운영/g) || []).length;
+  return ownerHits < 1 || hasReportingVoicePattern(t);
+}
+
+function hasWeakDetail(text) {
+  const t = String(text || '');
+  const directActionHits = (t.match(/만들|구웠|조정|바꿨|줄였|잡았|준비/g) || []).length;
+  const concreteHits = (t.match(/오늘|시음|오븐|토핑|원두|국물|다운펌|염색|녹차라떼|치즈케이크/g) || []).length;
+  const vagueHits = DETAIL_WEAK_PATTERNS.reduce((sum, regex) => sum + ((t.match(regex) || []).length), 0);
+  return (directActionHits + concreteHits) < 2 || vagueHits >= 2;
+}
+
 function detectToneFromCaption(caption) {
   const text = String(caption || '').toLowerCase();
   const emotionalScore = EMOTIONAL_SIGNAL_PATTERNS.reduce((sum, regex) => sum + ((text.match(regex) || []).length), 0);
@@ -205,6 +231,9 @@ function getCaptionIssues(caption, tone = 'CASUAL') {
 
   const genericHits = GENERIC_CAPTION_PATTERNS.reduce((sum, regex) => sum + ((trimmed.match(regex) || []).length), 0);
   if (genericHits > 0) issues.push('generic');
+  if (hasReportingVoicePattern(trimmed)) issues.push('reporting_voice');
+  if (hasWeakOwnerVoice(trimmed)) issues.push('owner_voice_weak');
+  if (hasWeakDetail(trimmed)) issues.push('detail_weak');
   const hardBlockedHits = HARD_BLOCK_PATTERNS.reduce((sum, regex) => sum + ((trimmed.match(regex) || []).length), 0);
   const emotionalBlockedHits = tone === 'EMOTIONAL'
     ? EMOTIONAL_EXTRA_BLOCK_PATTERNS.reduce((sum, regex) => sum + ((trimmed.match(regex) || []).length), 0)
@@ -274,6 +303,7 @@ function getRewriteSystemPrompt(tone) {
 원문 사실은 유지하고 톤만 캐주얼로 고친다.
 사장님이 오늘 있었던 일을 직접 말하듯 2~3문장으로 작성한다.
 첫 문장은 바뀐 점이나 핵심 포인트부터, 둘째 문장은 손님 반응이나 현장 상황을 붙인다.
+"반응이 좋았어요"처럼 뭉뚱그린 말만 쓰지 말고 구체적인 한 장면을 넣는다.
 모든 문장을 같은 ~요 어미로 끝내지 않는다.
 공지문체 종결(습니다/입니다) 금지.
 금지어: 안녕하세요, 저희, 여러분, 고객님, 추천, 문의, 예약, 오세요, 만나보세요, 드셔보세요, 지금 바로, 놓치지 마세요, 특별한, 완벽한, 최고의
@@ -288,6 +318,7 @@ function getRewriteSystemPrompt(tone) {
 장면 1개, 변화 1개, 사장님 느낌 1개를 담고 과장된 위로/권유는 금지한다.
  "웃음소리로 가득", "따뜻한 에너지", "마음이 따뜻해집니다" 같은 과한 감상문 표현 금지.
  자기 자신을 "사장님은/사장님이"처럼 3인칭으로 쓰지 않는다.
+"반응이 좋았다"로 뭉개지 말고 실제로 들은 말이나 장면을 짧게 넣는다.
 공지형 단어(안내/운영/예약/문의) 반복 금지.
 "것 같아요", "기분이 좋아요" 같은 템플릿 마무리 금지.
 금지어: 안녕하세요, 저희, 여러분, 고객님, 문의, 예약, 오세요, 만나보세요, 지금 바로, 놓치지 마세요, 특별한, 완벽한, 최고의
@@ -301,6 +332,7 @@ function getRewriteSystemPrompt(tone) {
 1문장: 조정한 내용, 2문장: 손님 반응/효과, 3문장: 오늘 운영 상황.
  "~보였습니다", "많았습니다", "높은 편입니다"처럼 담백한 운영 문장으로 정리한다.
  모든 문장을 같은 종결로 반복하지 않고, "~요" 위주의 구어체는 피한다.
+"현재 운영은 원활합니다", "관심을 보이고 있습니다" 같은 빈 문장은 쓰지 않는다.
 권유형 광고 문구는 제거한다.
 금지어: 여러분, 고객님, 오세요, 만나보세요, 지금 바로, 놓치지 마세요, 특별한, 완벽한, 최고의
 새 사실 추가 금지.
