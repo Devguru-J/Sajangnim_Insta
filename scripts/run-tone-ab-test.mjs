@@ -442,8 +442,8 @@ async function generateByTone({ openai, model, category, tone, content, weather,
     tone === 'CASUAL'
       ? '- 2~3문장 구어체\n- 첫 문장은 핵심 변화부터, 둘째 문장은 손님 반응/현장 상황\n- 같은 ~요 어미 반복 금지'
       : tone === 'EMOTIONAL'
-        ? '- 장면 1개, 변화 1개, 느낌 1개\n- 템플릿 감성 문장, 과한 위로 문장, 사장님 3인칭 서술 금지\n- 안내문체 종결 최소화'
-        : '- 운영 브리핑 3문장 안팎\n- 조정 내용, 반응, 운영 상황 순서\n- 같은 종결 반복 금지, 전부 ~요 금지';
+        ? '- 장면 1개, 변화 1개, 느낌 1개\n- 템플릿 감성 문장, 과한 위로 문장, 사장님 3인칭 서술 금지\n- 실제로 들은 말이나 장면을 짧게 넣기\n- 안내문체 종결 최소화'
+        : '- 운영 브리핑 3문장 안팎\n- 조정 내용, 반응, 운영 상황 순서\n- 같은 종결 반복 금지, 전부 ~요 금지\n- 빈 운영 문장 금지';
   let systemPrompt = `너는 ${category} 매장 사장님이다.
 톤: ${tone}
 톤 설명: ${TONE_GUIDE[tone]}
@@ -457,6 +457,8 @@ async function generateByTone({ openai, model, category, tone, content, weather,
 - 하드 금지어: 여러분, 고객님, 오세요, 만나보세요, 지금 바로, 놓치지 마세요, 특별한, 완벽한, 최고의
 - "웃음소리로 가득", "따뜻한 에너지" 같은 과장 감상문 금지
 - "사장님은/사장님이" 같은 자기 3인칭 서술 금지
+- "반응이 좋았어요" 같은 뭉뚱그린 말만 쓰지 말고 구체적인 한 장면 넣기
+- "현재 운영은 원활합니다", "관심을 보이고 있습니다" 같은 빈 운영 문장 금지
 - 톤별 강제 규칙:
 ${toneRule}
 JSON으로 {"caption":"..."} 만 응답`;
@@ -575,7 +577,7 @@ async function main() {
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-  const GENERATION_MODEL = process.env.OPENAI_GENERATION_MODEL || 'gpt-4o-mini';
+  const GENERATION_MODEL = process.env.OPENAI_GENERATION_MODEL || 'gpt-4o';
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !OPENAI_API_KEY) {
     throw new Error('SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, OPENAI_API_KEY가 필요합니다.');

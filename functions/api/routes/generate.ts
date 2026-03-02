@@ -17,6 +17,14 @@ const TONE_GUIDE: Record<string, string> = {
     PROFESSIONAL: '운영자가 오늘 변경점과 반응을 간단히 브리핑하는 톤',
 };
 
+const CONTENT_TYPE_GUIDE: Record<string, string> = {
+    NEW_MENU: '신메뉴/신제품 소개. 무엇이 달라졌는지와 첫 반응이 핵심',
+    EVENT: '할인/이벤트/프로모션 안내. 조건보다 이유와 현장 반응이 핵심',
+    DAILY_UPDATE: '오늘 매장 상황 공유. 날씨, 주문 흐름, 준비 상황이 핵심',
+    REVIEW_HIGHLIGHT: '손님 반응이나 후기 중심 홍보. 어떤 말이 나왔는지가 핵심',
+    LIMITED_STOCK: '한정 수량/재고/마감 임박 안내. 과장 없이 현재 상황이 핵심',
+};
+
 const TONE_RULES: Record<string, string> = {
     EMOTIONAL: `- 가게 일기처럼 3~4문장으로 작성
 - 1문장은 오늘 장면, 1문장은 메뉴/시술 변화, 1문장은 사장님 느낌으로 구성
@@ -164,6 +172,17 @@ type TodayContext = {
     customerReaction?: string;
 };
 
+type StructuredBrief = {
+    contentType: string;
+    mainFocus: string;
+    productOrService: string;
+    changePoint: string;
+    sceneDetail: string;
+    customerCue: string;
+    ownerAngle: string;
+    operationNote: string;
+};
+
 type ScoringConfig = {
     base: number;
     lengthWeight: number;
@@ -219,8 +238,64 @@ const parseGeneratedResult = (raw: string | null | undefined): GenerationResult 
     }
 };
 
+const parseStructuredBrief = (raw: string | null | undefined): StructuredBrief | null => {
+    try {
+        const parsed = JSON.parse(raw || '{}');
+        return {
+            contentType: typeof parsed.contentType === 'string' ? parsed.contentType.trim().toUpperCase() : 'DAILY_UPDATE',
+            mainFocus: typeof parsed.mainFocus === 'string' ? parsed.mainFocus.trim() : '',
+            productOrService: typeof parsed.productOrService === 'string' ? parsed.productOrService.trim() : '',
+            changePoint: typeof parsed.changePoint === 'string' ? parsed.changePoint.trim() : '',
+            sceneDetail: typeof parsed.sceneDetail === 'string' ? parsed.sceneDetail.trim() : '',
+            customerCue: typeof parsed.customerCue === 'string' ? parsed.customerCue.trim() : '',
+            ownerAngle: typeof parsed.ownerAngle === 'string' ? parsed.ownerAngle.trim() : '',
+            operationNote: typeof parsed.operationNote === 'string' ? parsed.operationNote.trim() : '',
+        };
+    } catch {
+        return null;
+    }
+};
+
 const countPatternHits = (text: string, patterns: RegExp[]): number =>
     patterns.reduce((sum, regex) => sum + ((text.match(regex) || []).length), 0);
+
+const inferContentType = (text: string, purpose: string): string => {
+    const source = `${text} ${purpose}`.toLowerCase();
+    if (/(할인|이벤트|행사|프로모션|특가|쿠폰)/.test(source)) return 'EVENT';
+    if (/(신메뉴|새로|신규|출시|개시|오픈|런칭)/.test(source)) return 'NEW_MENU';
+    if (/(품절|한정|소진|재고|마감\s*임박|수량)/.test(source)) return 'LIMITED_STOCK';
+    if (/(후기|반응|리뷰|칭찬|좋다고|재주문|만족)/.test(source)) return 'REVIEW_HIGHLIGHT';
+    return 'DAILY_UPDATE';
+};
+
+const buildFallbackBrief = (
+    content: string,
+    purpose: string,
+    todayContext: TodayContext | undefined
+): StructuredBrief => ({
+    contentType: inferContentType([content, purpose].filter(Boolean).join(' '), purpose || ''),
+    mainFocus: content.trim(),
+    productOrService: content.trim().split(/[,.!\n]/)[0]?.trim() || content.trim(),
+    changePoint: content.trim(),
+    sceneDetail: todayContext?.weather?.trim() || todayContext?.inventoryStatus?.trim() || '',
+    customerCue: todayContext?.customerReaction?.trim() || '',
+    ownerAngle: purpose?.trim() || '오늘 바뀐 점과 현장 반응 중심',
+    operationNote: todayContext?.inventoryStatus?.trim() || '',
+});
+
+const stringifyStructuredBrief = (brief: StructuredBrief): string =>
+    [
+        `글종류: ${brief.contentType}`,
+        `핵심초점: ${brief.mainFocus}`,
+        `상품/서비스: ${brief.productOrService}`,
+        `변경점: ${brief.changePoint}`,
+        `현장디테일: ${brief.sceneDetail}`,
+        `손님반응: ${brief.customerCue}`,
+        `사장님시선: ${brief.ownerAngle}`,
+        `운영상황: ${brief.operationNote}`,
+    ]
+        .filter((line) => !line.endsWith(': '))
+        .join('\n');
 
 const getToneLengthRange = (tone: string): { min: number; max: number } =>
     TONE_LENGTH_RANGE[(tone || '').toUpperCase()] || TONE_LENGTH_RANGE.CASUAL;
@@ -649,12 +724,59 @@ export const registerGenerateRoutes = (app: Hono<{ Bindings: Bindings }>) => {
             const scoringConfig = getScoringConfig(c.env);
             const ragConfig = getRagConfig(c.env);
             const openai = getOpenAI(c.env);
+            const generationModel = c.env.OPENAI_GENERATION_MODEL || 'gpt-4o';
 
             const contextWeather = todayContext?.weather?.trim() || '';
             const contextInventory = todayContext?.inventoryStatus?.trim() || '';
             const contextReaction = todayContext?.customerReaction?.trim() || '';
             const contextList = [contextWeather, contextInventory, contextReaction].filter(Boolean);
             const contextualInput = [content, contextWeather, contextInventory, contextReaction].filter(Boolean).join('\n');
+            const initialContentType = inferContentType([content, contextWeather, contextInventory, contextReaction].filter(Boolean).join('\n'), purpose || '');
+
+            let structuredBrief = buildFallbackBrief(content, purpose, todayContext);
+            try {
+                const briefCompletion = await openai.chat.completions.create({
+                    model: generationModel,
+                    messages: [
+                        {
+                            role: 'system',
+                            content: `너는 인스타 홍보 문장을 쓰기 전에 소재를 정리하는 편집자다.
+입력 정보를 보고 글 종류와 핵심 소재를 구조화한다.
+contentType은 아래 중 하나만 쓴다:
+- NEW_MENU
+- EVENT
+- DAILY_UPDATE
+- REVIEW_HIGHLIGHT
+- LIMITED_STOCK
+과장 없이 사실만 정리한다.
+응답은 JSON으로만 준다:
+{"contentType":"...","mainFocus":"...","productOrService":"...","changePoint":"...","sceneDetail":"...","customerCue":"...","ownerAngle":"...","operationNote":"..."}`,
+                        },
+                        {
+                            role: 'user',
+                            content: `업종: ${businessType}
+목적: ${purpose || '미입력'}
+초기 추정 글 종류: ${initialContentType}
+홍보 내용: ${content}
+오늘 상황:
+- 날씨: ${contextWeather || '미입력'}
+- 재고/운영상황: ${contextInventory || '미입력'}
+- 손님 반응: ${contextReaction || '미입력'}`,
+                        },
+                    ],
+                    response_format: { type: 'json_object' },
+                    temperature: 0.2,
+                });
+
+                const parsedBrief = parseStructuredBrief(briefCompletion.choices[0]?.message?.content);
+                if (parsedBrief) {
+                    structuredBrief = parsedBrief;
+                }
+            } catch (briefError) {
+                console.warn('Structured brief generation failed, using fallback:', briefError);
+            }
+
+            const structuredInput = stringifyStructuredBrief(structuredBrief);
 
             const category = BUSINESS_TYPE_TO_CATEGORY[businessType.toUpperCase()] || 'cafe';
             let exampleCaptions: string[] = [];
@@ -662,7 +784,7 @@ export const registerGenerateRoutes = (app: Hono<{ Bindings: Bindings }>) => {
             try {
                 const embeddingResponse = await openai.embeddings.create({
                     model: 'text-embedding-3-small',
-                    input: contextualInput || content,
+                    input: [structuredInput, contextualInput || content].filter(Boolean).join('\n'),
                 });
 
                 const queryEmbedding = `[${embeddingResponse.data[0].embedding.join(',')}]`;
@@ -712,6 +834,7 @@ export const registerGenerateRoutes = (app: Hono<{ Bindings: Bindings }>) => {
             const normalizedTone = tone?.toUpperCase?.() || 'CASUAL';
             const toneRule = TONE_RULES[normalizedTone] || TONE_RULES.CASUAL;
             const generationTemperature = TONE_TEMPERATURE[normalizedTone] ?? 0.8;
+            const contentTypeGuide = CONTENT_TYPE_GUIDE[structuredBrief.contentType] || CONTENT_TYPE_GUIDE.DAILY_UPDATE;
             const toneSpecificRule =
                 normalizedTone === 'CASUAL'
                     ? '- 캐주얼: 오늘 있었던 말을 툭 꺼내듯 2~3문장. 첫 문장은 핵심 변화부터, 둘째 문장은 손님 반응이나 현장 상황. 같은 ~요 어미 반복 금지.'
@@ -742,6 +865,8 @@ export const registerGenerateRoutes = (app: Hono<{ Bindings: Bindings }>) => {
 - 메뉴 설명 + 본인 느낌이나 오늘 상황을 자연스럽게
 - 솔직하게 (가격, 맛, 반응 등)
 - 이모지는 1-2개만
+- 글 종류: ${structuredBrief.contentType}
+- 글 종류 가이드: ${contentTypeGuide}
 - 톤 가이드: ${toneGuide}
 - 톤 강제 규칙:
 ${toneRule}
@@ -771,18 +896,27 @@ JSON으로 응답:
 - engagementQuestion: 자연스러운 질문 1개`;
 
             const completion = await openai.chat.completions.create({
-                model: 'gpt-4o-mini',
+                model: generationModel,
                 messages: [
                     { role: 'system', content: systemPrompt },
                     {
                         role: 'user',
                         content: `홍보 내용: ${content}
+구조화된 소재:
+- 글 종류: ${structuredBrief.contentType}
+- 핵심 초점: ${structuredBrief.mainFocus || '미정리'}
+- 상품/서비스: ${structuredBrief.productOrService || '미정리'}
+- 변경점: ${structuredBrief.changePoint || '미정리'}
+- 현장 디테일: ${structuredBrief.sceneDetail || '미정리'}
+- 손님 반응: ${structuredBrief.customerCue || '미정리'}
+- 사장님 시선: ${structuredBrief.ownerAngle || '미정리'}
+- 운영 상황: ${structuredBrief.operationNote || '미정리'}
 오늘 상황:
 - 날씨: ${contextWeather || '미입력'}
 - 재고/운영상황: ${contextInventory || '미입력'}
 - 손님 반응: ${contextReaction || '미입력'}
 
-요청: 광고 문구처럼 보이지 않게, 실제로 오늘 가게에서 있었던 말처럼 써주세요.`,
+요청: 구조화된 소재를 먼저 따르고, 광고 문구처럼 보이지 않게 실제로 오늘 가게에서 있었던 말처럼 써주세요.`,
                     },
                 ],
                 response_format: { type: 'json_object' },
@@ -793,7 +927,7 @@ JSON으로 응답:
                 top_p: 0.95,
             });
 
-            const sourceForScoring = contextualInput || content;
+            const sourceForScoring = [structuredInput, contextualInput || content].filter(Boolean).join('\n');
             const candidates = completion.choices
                 .map((choice) => parseGeneratedResult(choice.message.content))
                 .filter((item) => item.caption);
@@ -819,7 +953,7 @@ JSON으로 응답:
 
             if (bestIssues.length > 0 && result.caption) {
                 const rewrite = await openai.chat.completions.create({
-                    model: 'gpt-4o-mini',
+                    model: generationModel,
                     messages: [
                         {
                             role: 'system',
@@ -852,6 +986,9 @@ ${toneRule}
             const needsToneFix =
                 finalDetectedTone !== normalizedTone ||
                 hasAiLikePattern(result.caption || '') ||
+                hasReportingVoicePattern(result.caption || '') ||
+                hasWeakDetail(result.caption || '') ||
+                hasWeakOwnerVoice(result.caption || '') ||
                 hasHardBlockedPattern(result.caption || '') ||
                 (normalizedTone === 'EMOTIONAL' && hasEmotionalBlockedPattern(result.caption || '')) ||
                 (normalizedTone === 'PROFESSIONAL' && hasExcessiveYoEnding(result.caption || '')) ||
@@ -861,7 +998,7 @@ ${toneRule}
             if (needsToneFix && result.caption) {
                 const targetRange = getToneLengthRange(normalizedTone);
                 const strictRewrite = await openai.chat.completions.create({
-                    model: 'gpt-4o-mini',
+                    model: generationModel,
                     messages: [
                         {
                             role: 'system',
@@ -898,7 +1035,7 @@ ${toneRule}
             if (result.caption && (hasHardBlockedPattern(result.caption) || (normalizedTone === 'EMOTIONAL' && hasEmotionalBlockedPattern(result.caption)))) {
                 const targetRange = getToneLengthRange(normalizedTone);
                 const hardBlockedRewrite = await openai.chat.completions.create({
-                    model: 'gpt-4o-mini',
+                    model: generationModel,
                     messages: [
                         {
                             role: 'system',
@@ -927,7 +1064,7 @@ JSON {"caption":"..."}만 출력.`,
 
             if (normalizedTone === 'CASUAL' && result.caption && detectToneFromCaption(result.caption) === 'EMOTIONAL') {
                 const casualRewrite = await openai.chat.completions.create({
-                    model: 'gpt-4o-mini',
+                    model: generationModel,
                     messages: [
                         {
                             role: 'system',
@@ -958,7 +1095,7 @@ JSON {"caption":"..."}만 출력.`,
 
             if (normalizedTone === 'EMOTIONAL' && result.caption && detectToneFromCaption(result.caption) !== 'EMOTIONAL') {
                 const emotionalRewrite = await openai.chat.completions.create({
-                    model: 'gpt-4o-mini',
+                    model: generationModel,
                     messages: [
                         {
                             role: 'system',
@@ -993,7 +1130,7 @@ JSON {"caption":"..."}만 출력.`,
 
                 if (result.caption && (changedBySanitize || hasBrokenCaptionPattern(result.caption) || isLengthOutOfTarget(result.caption, normalizedTone))) {
                     const polishRewrite = await openai.chat.completions.create({
-                        model: 'gpt-4o-mini',
+                        model: generationModel,
                         messages: [
                             {
                                 role: 'system',

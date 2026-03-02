@@ -3,6 +3,7 @@ export type Bindings = {
     SUPABASE_ANON_KEY: string;
     SUPABASE_SERVICE_ROLE_KEY: string;
     OPENAI_API_KEY: string;
+    OPENAI_GENERATION_MODEL?: string;
     STRIPE_SECRET_KEY: string;
     STRIPE_WEBHOOK_SECRET: string;
     JUSO_API_KEY: string;
