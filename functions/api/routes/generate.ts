@@ -178,6 +178,7 @@ type StructuredBrief = {
     productOrService: string;
     changePoint: string;
     sceneDetail: string;
+    visualCue: string;
     customerCue: string;
     ownerAngle: string;
     operationNote: string;
@@ -247,6 +248,7 @@ const parseStructuredBrief = (raw: string | null | undefined): StructuredBrief |
             productOrService: typeof parsed.productOrService === 'string' ? parsed.productOrService.trim() : '',
             changePoint: typeof parsed.changePoint === 'string' ? parsed.changePoint.trim() : '',
             sceneDetail: typeof parsed.sceneDetail === 'string' ? parsed.sceneDetail.trim() : '',
+            visualCue: typeof parsed.visualCue === 'string' ? parsed.visualCue.trim() : '',
             customerCue: typeof parsed.customerCue === 'string' ? parsed.customerCue.trim() : '',
             ownerAngle: typeof parsed.ownerAngle === 'string' ? parsed.ownerAngle.trim() : '',
             operationNote: typeof parsed.operationNote === 'string' ? parsed.operationNote.trim() : '',
@@ -278,6 +280,7 @@ const buildFallbackBrief = (
     productOrService: content.trim().split(/[,.!\n]/)[0]?.trim() || content.trim(),
     changePoint: content.trim(),
     sceneDetail: todayContext?.weather?.trim() || todayContext?.inventoryStatus?.trim() || '',
+    visualCue: '',
     customerCue: todayContext?.customerReaction?.trim() || '',
     ownerAngle: purpose?.trim() || '오늘 바뀐 점과 현장 반응 중심',
     operationNote: todayContext?.inventoryStatus?.trim() || '',
@@ -290,12 +293,21 @@ const stringifyStructuredBrief = (brief: StructuredBrief): string =>
         `상품/서비스: ${brief.productOrService}`,
         `변경점: ${brief.changePoint}`,
         `현장디테일: ${brief.sceneDetail}`,
+        `사진단서: ${brief.visualCue}`,
         `손님반응: ${brief.customerCue}`,
         `사장님시선: ${brief.ownerAngle}`,
         `운영상황: ${brief.operationNote}`,
     ]
         .filter((line) => !line.endsWith(': '))
         .join('\n');
+
+const buildVisionUserContent = (text: string, imageDataUrl?: string): string | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }> => {
+    if (!imageDataUrl) return text;
+    return [
+        { type: 'text', text },
+        { type: 'image_url', image_url: { url: imageDataUrl } },
+    ];
+};
 
 const getToneLengthRange = (tone: string): { min: number; max: number } =>
     TONE_LENGTH_RANGE[(tone || '').toUpperCase()] || TONE_LENGTH_RANGE.CASUAL;
@@ -686,13 +698,23 @@ export const registerGenerateRoutes = (app: Hono<{ Bindings: Bindings }>) => {
     app.post('/generate', async (c) => {
         try {
             const body = await c.req.json();
-            const { businessType, content, tone, purpose, todayContext } = body as {
+            const { businessType, content, tone, purpose, todayContext, imageDataUrl } = body as {
                 businessType: string;
                 content: string;
                 tone: string;
                 purpose: string;
                 todayContext?: TodayContext;
+                imageDataUrl?: string;
             };
+
+            const normalizedImageDataUrl = typeof imageDataUrl === 'string' ? imageDataUrl.trim() : '';
+            const hasImageInput = /^data:image\/(jpeg|jpg|png|webp);base64,/i.test(normalizedImageDataUrl);
+            if (normalizedImageDataUrl && !hasImageInput) {
+                return c.json({ error: 'Unsupported image format' }, 400);
+            }
+            if (normalizedImageDataUrl.length > 1_700_000) {
+                return c.json({ error: 'Image payload too large' }, 400);
+            }
 
             const { errorResponse, user } = await requireUser(c);
             if (errorResponse || !user) return errorResponse;
@@ -742,6 +764,7 @@ export const registerGenerateRoutes = (app: Hono<{ Bindings: Bindings }>) => {
                             role: 'system',
                             content: `너는 인스타 홍보 문장을 쓰기 전에 소재를 정리하는 편집자다.
 입력 정보를 보고 글 종류와 핵심 소재를 구조화한다.
+사진이 있으면 사진에서 보이는 구도, 색감, 음식/매장/시술 상태, 분위기를 짧게 요약한다.
 contentType은 아래 중 하나만 쓴다:
 - NEW_MENU
 - EVENT
@@ -750,18 +773,19 @@ contentType은 아래 중 하나만 쓴다:
 - LIMITED_STOCK
 과장 없이 사실만 정리한다.
 응답은 JSON으로만 준다:
-{"contentType":"...","mainFocus":"...","productOrService":"...","changePoint":"...","sceneDetail":"...","customerCue":"...","ownerAngle":"...","operationNote":"..."}`,
+{"contentType":"...","mainFocus":"...","productOrService":"...","changePoint":"...","sceneDetail":"...","visualCue":"...","customerCue":"...","ownerAngle":"...","operationNote":"..."}`,
                         },
                         {
                             role: 'user',
-                            content: `업종: ${businessType}
+                            content: buildVisionUserContent(`업종: ${businessType}
 목적: ${purpose || '미입력'}
 초기 추정 글 종류: ${initialContentType}
 홍보 내용: ${content}
 오늘 상황:
 - 날씨: ${contextWeather || '미입력'}
 - 재고/운영상황: ${contextInventory || '미입력'}
-- 손님 반응: ${contextReaction || '미입력'}`,
+- 손님 반응: ${contextReaction || '미입력'}
+사진이 있으면 사진에서 보이는 핵심 장면도 함께 정리해줘.`, hasImageInput ? normalizedImageDataUrl : undefined),
                         },
                     ],
                     response_format: { type: 'json_object' },
@@ -872,6 +896,7 @@ contentType은 아래 중 하나만 쓴다:
 ${toneRule}
 - 문장 끝맺음을 다양하게 (예: "~했어요 / ~더라고요 / ~네요" 반복 금지)
 - 최소 1문장은 실제 현장 디테일(주문 반응, 준비 과정, 재고/날씨 중 1개)을 넣기
+- 사진이 있으면 사진에서 보이는 시각 단서(색감, 구도, 분위기)를 1문장 안에 자연스럽게 반영하기
 - 입력된 "오늘 상황" 문장을 그대로 복사하지 말고 반드시 자연스럽게 의역해서 녹이기
 - 길이는 반드시 ${targetRange.min}~${targetRange.max}자 범위
 ${toneSpecificRule}
@@ -908,6 +933,7 @@ JSON으로 응답:
 - 상품/서비스: ${structuredBrief.productOrService || '미정리'}
 - 변경점: ${structuredBrief.changePoint || '미정리'}
 - 현장 디테일: ${structuredBrief.sceneDetail || '미정리'}
+- 사진 단서: ${structuredBrief.visualCue || '미정리'}
 - 손님 반응: ${structuredBrief.customerCue || '미정리'}
 - 사장님 시선: ${structuredBrief.ownerAngle || '미정리'}
 - 운영 상황: ${structuredBrief.operationNote || '미정리'}

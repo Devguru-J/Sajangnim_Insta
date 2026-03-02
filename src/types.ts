@@ -27,6 +27,7 @@ export interface GeneratedPost {
     engagementQuestion: string;
     createdAt: number;
     businessType: BusinessType;
+    imageDataUrl?: string;
 }
 
 export interface User {

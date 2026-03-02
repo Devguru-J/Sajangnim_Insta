@@ -34,6 +34,7 @@ export default function Results() {
         engagementQuestion: resultJson.engagementQuestion || "",
         createdAt: new Date(data.created_at).getTime(),
         businessType: data.industry,
+        imageDataUrl: window.sessionStorage.getItem(`generation-image:${data.id}`) || undefined,
       })
       setLoading(false)
     }

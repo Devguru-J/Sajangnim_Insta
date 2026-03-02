@@ -27,6 +27,14 @@ export default function ResultsView({ post }: ResultsViewProps) {
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 <div className="lg:col-span-7 space-y-6">
+                    {post.imageDataUrl && (
+                        <div className="bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-gray-100 dark:border-white/10 p-4">
+                            <div className="rounded-xl overflow-hidden bg-background-light dark:bg-black/30">
+                                <img src={post.imageDataUrl} alt="생성에 사용한 이미지" className="w-full h-auto object-cover" />
+                            </div>
+                        </div>
+                    )}
+
                     <div className="bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-gray-100 dark:border-white/10 p-6">
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-3">

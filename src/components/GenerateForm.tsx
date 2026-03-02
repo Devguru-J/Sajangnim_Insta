@@ -13,6 +13,43 @@ interface GeneratedPreview {
     hashtags: string[];
 }
 
+const MAX_IMAGE_SIZE_BYTES = 2 * 1024 * 1024;
+
+const resizeImageToDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const img = new Image();
+            img.onload = () => {
+                const maxDimension = 1280;
+                const scale = Math.min(1, maxDimension / Math.max(img.width, img.height));
+                const width = Math.max(1, Math.round(img.width * scale));
+                const height = Math.max(1, Math.round(img.height * scale));
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    reject(new Error('Failed to create canvas context'));
+                    return;
+                }
+                ctx.drawImage(img, 0, 0, width, height);
+
+                let quality = 0.88;
+                let dataUrl = canvas.toDataURL('image/jpeg', quality);
+                while (dataUrl.length > 1_600_000 && quality > 0.55) {
+                    quality -= 0.08;
+                    dataUrl = canvas.toDataURL('image/jpeg', quality);
+                }
+                resolve(dataUrl);
+            };
+            img.onerror = () => reject(new Error('이미지를 불러오지 못했습니다.'));
+            img.src = String(reader.result);
+        };
+        reader.onerror = () => reject(new Error('이미지를 읽지 못했습니다.'));
+        reader.readAsDataURL(file);
+    });
+
 const formatDeviceTime = (date: Date): string =>
     new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date);
 
@@ -42,6 +79,8 @@ export default function GenerateForm({ userIndustry }: GenerateFormProps) {
     const [showContextFields, setShowContextFields] = useState(false);
     const [preview, setPreview] = useState<GeneratedPreview | null>(null);
     const [deviceTime, setDeviceTime] = useState(() => formatDeviceTime(new Date()));
+    const [imageDataUrl, setImageDataUrl] = useState('');
+    const [imageName, setImageName] = useState('');
 
     useEffect(() => {
         const updateTime = () => {
@@ -89,6 +128,7 @@ export default function GenerateForm({ userIndustry }: GenerateFormProps) {
                     content,
                     tone,
                     purpose: Purpose.VISIT,
+                    imageDataUrl: imageDataUrl || undefined,
                     todayContext: {
                         weather: weather.trim(),
                         inventoryStatus: inventoryStatus.trim(),
@@ -106,6 +146,9 @@ export default function GenerateForm({ userIndustry }: GenerateFormProps) {
             }
 
             const data = await response.json();
+            if (imageDataUrl && data.id) {
+                window.sessionStorage.setItem(`generation-image:${data.id}`, imageDataUrl);
+            }
             setPreview({
                 id: data.id,
                 caption: data.caption || '',
@@ -135,6 +178,37 @@ export default function GenerateForm({ userIndustry }: GenerateFormProps) {
         return 'local_cafe';
     };
 
+    const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+            alert('이미지 파일만 업로드 가능합니다.');
+            return;
+        }
+
+        if (file.size > MAX_IMAGE_SIZE_BYTES) {
+            alert('이미지 파일은 2MB 이하여야 합니다.');
+            return;
+        }
+
+        try {
+            const compressed = await resizeImageToDataUrl(file);
+            setImageDataUrl(compressed);
+            setImageName(file.name);
+        } catch (error) {
+            console.error(error);
+            alert('이미지 처리 중 오류가 발생했습니다.');
+        } finally {
+            e.target.value = '';
+        }
+    };
+
+    const clearImage = () => {
+        setImageDataUrl('');
+        setImageName('');
+    };
+
     return (
         <div className="max-w-7xl mx-auto px-4 py-10 animate-fade-in">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
@@ -156,6 +230,39 @@ export default function GenerateForm({ userIndustry }: GenerateFormProps) {
                                     <p className="font-bold text-primary">{getIndustryLabel(businessType)}</p>
                                     <p className="text-xs text-zinc-600 dark:text-zinc-400">프로필에서 설정한 업종입니다</p>
                                 </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-semibold mb-3 text-zinc-900 dark:text-zinc-50">사진 추가 (선택)</label>
+                            <div className="space-y-3">
+                                <label className="flex items-center justify-center gap-2 w-full h-12 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 cursor-pointer hover:border-primary/60 transition-colors">
+                                    <span className="material-symbols-outlined text-base">upload</span>
+                                    <span className="text-sm font-medium">
+                                        {imageDataUrl ? '다른 사진 선택' : '사진 업로드'}
+                                    </span>
+                                    <input
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/webp"
+                                        onChange={handleImageSelect}
+                                        className="hidden"
+                                    />
+                                </label>
+                                {imageDataUrl && (
+                                    <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 py-3">
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50 truncate">{imageName || '업로드한 사진'}</p>
+                                            <p className="text-xs text-zinc-500 dark:text-zinc-400">캡션 생성 시 사진 분위기와 구성을 함께 반영합니다.</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={clearImage}
+                                            className="text-xs font-semibold text-red-500 hover:text-red-600 cursor-pointer"
+                                        >
+                                            제거
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -288,6 +395,8 @@ export default function GenerateForm({ userIndustry }: GenerateFormProps) {
                             <div className="aspect-square bg-zinc-200 dark:bg-zinc-700 rounded-lg mb-4 flex items-center justify-center text-zinc-400 dark:text-zinc-500 overflow-hidden">
                                 {loading ? (
                                     <div className="w-full h-full bg-gradient-to-br from-zinc-100 via-zinc-200 to-zinc-100 dark:from-zinc-700 dark:via-zinc-600 dark:to-zinc-700 animate-pulse"></div>
+                                ) : imageDataUrl ? (
+                                    <img src={imageDataUrl} alt="업로드 미리보기" className="w-full h-full object-cover" />
                                 ) : (
                                     <span className="material-symbols-outlined text-5xl">image</span>
                                 )}
