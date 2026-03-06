@@ -1,0 +1,13 @@
+case_id,category,tone,score,detected_tone,issues,length_ok,hard_blocked,example_count,caption
+cafe_01,cafe,EMOTIONAL,0,ERROR,Connection error.,0,0,0,
+cafe_01,cafe,CASUAL,0,ERROR,Connection error.,0,0,0,
+cafe_01,cafe,PROFESSIONAL,0,ERROR,Connection error.,0,0,0,
+cafe_02,cafe,EMOTIONAL,0,ERROR,Connection error.,0,0,0,
+cafe_02,cafe,CASUAL,0,ERROR,Connection error.,0,0,0,
+cafe_02,cafe,PROFESSIONAL,0,ERROR,Connection error.,0,0,0,
+cafe_03,cafe,EMOTIONAL,0,ERROR,Connection error.,0,0,0,
+cafe_03,cafe,CASUAL,0,ERROR,Connection error.,0,0,0,
+cafe_03,cafe,PROFESSIONAL,0,ERROR,Connection error.,0,0,0,
+cafe_04,cafe,EMOTIONAL,0,ERROR,Connection error.,0,0,0,
+cafe_04,cafe,CASUAL,0,ERROR,Connection error.,0,0,0,
+cafe_04,cafe,PROFESSIONAL,0,ERROR,Connection error.,0,0,0,

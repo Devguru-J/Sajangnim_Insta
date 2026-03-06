@@ -1,0 +1,162 @@
+[
+  {
+    "id": "cafe_01",
+    "category": "cafe",
+    "content": "신메뉴 딸기라떼를 출시했어요. 우유 비율을 조정해서 덜 달고 더 깔끔하게 만들었어요.",
+    "weather": "비가 와서 따뜻한 음료 주문이 늘었어요",
+    "inventoryStatus": "딸기 퓌레 재고는 충분해요",
+    "customerReaction": "시음한 손님이 덜 달아서 좋다고 했어요"
+  },
+  {
+    "id": "cafe_02",
+    "category": "cafe",
+    "content": "아침마다 구운 크루아상을 오늘은 조금 더 넉넉히 준비했어요.",
+    "weather": "아침 기온이 낮아졌어요",
+    "inventoryStatus": "버터 재고가 충분해서 추가 생산 가능해요",
+    "customerReaction": "오픈 직후 단골 손님들이 바로 찾아주셨어요"
+  },
+  {
+    "id": "cafe_03",
+    "category": "cafe",
+    "content": "디카페인 원두를 바꿔서 향이 더 부드럽게 느껴지도록 조정했습니다.",
+    "weather": "흐린 날씨라 매장 체류 시간이 길어요",
+    "inventoryStatus": "디카페인 원두는 이번 주 물량이 넉넉해요",
+    "customerReaction": "저녁 시간대 디카페인 주문이 늘었어요"
+  },
+  {
+    "id": "cafe_04",
+    "category": "cafe",
+    "content": "주말 한정 브런치 플레이트를 다시 시작했어요.",
+    "weather": "주말에 햇볕이 좋아 테라스 이용이 많아요",
+    "inventoryStatus": "샐러드 채소는 당일 입고로 신선해요",
+    "customerReaction": "브런치 사진 찍고 재방문 문의가 들어왔어요"
+  },
+  {
+    "id": "cafe_05",
+    "category": "cafe",
+    "content": "수제 티라미수를 레시피 조금 바꿔서 크림을 더 가볍게 만들었어요.",
+    "weather": "저녁에 선선해서 디저트 주문이 꾸준해요",
+    "inventoryStatus": "마스카포네 치즈 재고가 적당히 남아 있어요",
+    "customerReaction": "달지 않아서 좋다는 피드백이 많았어요"
+  },
+  {
+    "id": "restaurant_01",
+    "category": "restaurant",
+    "content": "점심 특선 메뉴 구성을 바꿔서 대기 시간을 줄였어요.",
+    "weather": "점심 시간에 비가 내려 홀 회전이 느렸어요",
+    "inventoryStatus": "메인 재료 소진 속도가 빨라 저녁 메뉴를 일부 조정했어요",
+    "customerReaction": "점심 특선 반응이 좋아 추가 주문이 많았어요"
+  },
+  {
+    "id": "restaurant_02",
+    "category": "restaurant",
+    "content": "오늘부터 국물 베이스를 다시 끓여서 짠맛을 줄였습니다.",
+    "weather": "기온이 내려가 뜨거운 메뉴 주문이 많아요",
+    "inventoryStatus": "육수는 아침에 새로 준비해 여유 있어요",
+    "customerReaction": "국물 맛이 더 편해졌다는 의견을 받았어요"
+  },
+  {
+    "id": "restaurant_03",
+    "category": "restaurant",
+    "content": "저녁 세트 메뉴에 사이드 구성을 하나 추가했습니다.",
+    "weather": "퇴근 시간에 바람이 차가워졌어요",
+    "inventoryStatus": "사이드 재료는 당일 준비분으로 충분해요",
+    "customerReaction": "세트 구성이 알차다는 반응이 많았어요"
+  },
+  {
+    "id": "restaurant_04",
+    "category": "restaurant",
+    "content": "주방 동선을 바꿔서 주문 후 제공 시간을 안정화했어요.",
+    "weather": "저녁 시간대 외부 대기 손님이 생겼어요",
+    "inventoryStatus": "주요 재료는 마감 전까지 충분합니다",
+    "customerReaction": "예전보다 음식 나오는 속도가 빨라졌다고 했어요"
+  },
+  {
+    "id": "restaurant_05",
+    "category": "restaurant",
+    "content": "매운맛 단계를 세분화해서 취향에 맞게 고를 수 있게 했어요.",
+    "weather": "비가 와서 배달 주문 비중이 높아졌어요",
+    "inventoryStatus": "소스 베이스는 충분하지만 일부 토핑은 한정 수량이에요",
+    "customerReaction": "맵기 선택이 쉬워졌다는 피드백이 많았어요"
+  },
+  {
+    "id": "salon_01",
+    "category": "salon",
+    "content": "다운펌 시술 시간을 줄이면서 유지력은 그대로 가도록 약제를 조정했어요.",
+    "weather": "비가 와서 곱슬 관련 문의가 많았어요",
+    "inventoryStatus": "주요 약제는 충분히 확보되어 있어요",
+    "customerReaction": "손질이 편해졌다는 후기가 들어왔어요"
+  },
+  {
+    "id": "salon_02",
+    "category": "salon",
+    "content": "봄 컬러 염색 팔레트를 새로 구성해서 추천 폭을 넓혔습니다.",
+    "weather": "주말 낮 기온이 올라 외출 고객이 많았어요",
+    "inventoryStatus": "애쉬 계열 염모제 재고가 적어 빠른 소진이 예상돼요",
+    "customerReaction": "상담 후 바로 예약 전환되는 비율이 높았어요"
+  },
+  {
+    "id": "salon_03",
+    "category": "salon",
+    "content": "손상모 고객을 위한 클리닉 단계를 세분화해 안내하고 있어요.",
+    "weather": "건조한 날씨로 정전기 관련 고민이 많아요",
+    "inventoryStatus": "클리닉 제품은 이번 주 충분합니다",
+    "customerReaction": "시술 후 결이 부드럽다는 반응이 좋았어요"
+  },
+  {
+    "id": "salon_04",
+    "category": "salon",
+    "content": "남성 커트 상담 시간을 늘려 스타일 유지 방법까지 같이 설명해드려요.",
+    "weather": "퇴근 이후 예약이 몰리는 흐름이에요",
+    "inventoryStatus": "왁스 샘플은 수량 제한이 있어요",
+    "customerReaction": "집에서 손질이 쉬워졌다는 피드백이 있었어요"
+  },
+  {
+    "id": "salon_05",
+    "category": "salon",
+    "content": "앞머리 펌 요청이 많아 시술 순서를 바꿔 대기 시간을 줄였습니다.",
+    "weather": "바람이 강해 스타일 무너짐 문의가 많아요",
+    "inventoryStatus": "열 보호 제품 재고가 충분해요",
+    "customerReaction": "시술 후 모양 유지가 잘 된다는 반응이 많았어요"
+  },
+  {
+    "id": "mixed_01",
+    "category": "cafe",
+    "content": "신메뉴 안내와 함께 기존 인기 메뉴를 같이 추천하려고 해요.",
+    "weather": "퇴근 시간에 쌀쌀해졌어요",
+    "inventoryStatus": "시그니처 메뉴 재료는 여유 있어요",
+    "customerReaction": "새 메뉴보다 익숙한 메뉴 재주문이 더 많았어요"
+  },
+  {
+    "id": "mixed_02",
+    "category": "restaurant",
+    "content": "포장 메뉴 구성을 조금 손봐서 집에서도 먹기 편하게 바꿨어요.",
+    "weather": "바람이 강해 외식보다 포장 비중이 높아요",
+    "inventoryStatus": "포장 용기는 충분히 준비되어 있어요",
+    "customerReaction": "국물 샘 걱정이 줄었다는 리뷰가 있었어요"
+  },
+  {
+    "id": "mixed_03",
+    "category": "salon",
+    "content": "예약 간격을 재조정해서 상담 시간을 더 확보했습니다.",
+    "weather": "비 소식이 있어 당일 변경 문의가 있어요",
+    "inventoryStatus": "주말 예약 슬롯은 거의 마감 상태예요",
+    "customerReaction": "상담이 꼼꼼해서 좋다는 후기가 들어왔어요"
+  },
+  {
+    "id": "mixed_04",
+    "category": "cafe",
+    "content": "오늘은 원두 추출값을 다시 맞춰서 산미를 조금 낮췄어요.",
+    "weather": "흐린 날이라 따뜻한 드립커피 주문이 많아요",
+    "inventoryStatus": "원두는 충분하고 디저트는 일부 품절됐어요",
+    "customerReaction": "커피가 더 편하게 넘어간다는 반응이 있었어요"
+  },
+  {
+    "id": "mixed_05",
+    "category": "restaurant",
+    "content": "주문 많은 메뉴는 조리 순서를 바꿔 제공 속도를 올렸어요.",
+    "weather": "저녁 시간대 갑자기 손님이 몰렸어요",
+    "inventoryStatus": "일부 반찬 재고가 빠르게 소진됐어요",
+    "customerReaction": "대기 시간이 줄어 만족도가 높았어요"
+  }
+]
