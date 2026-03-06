@@ -7,7 +7,8 @@ export type Bindings = {
     STRIPE_SECRET_KEY: string;
     STRIPE_WEBHOOK_SECRET: string;
     JUSO_API_KEY: string;
-    ADMIN_EMAIL: string;
+    ADMIN_EMAIL?: string;
+    DEV_FORCE_PREMIUM?: string;
     SCORE_BASE?: string;
     SCORE_LENGTH_WEIGHT?: string;
     SCORE_TONE_WEIGHT?: string;

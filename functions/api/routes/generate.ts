@@ -301,11 +301,15 @@ const stringifyStructuredBrief = (brief: StructuredBrief): string =>
         .filter((line) => !line.endsWith(': '))
         .join('\n');
 
-const buildVisionUserContent = (text: string, imageDataUrl?: string): string | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }> => {
-    if (!imageDataUrl) return text;
+const GENERATION_IMAGE_BUCKET = 'generation-images';
+const MAX_GENERATION_IMAGE_SIZE_BYTES = 2 * 1024 * 1024;
+const ALLOWED_GENERATION_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+const buildVisionUserContent = (text: string, imageUrl?: string): string | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }> => {
+    if (!imageUrl) return text;
     return [
         { type: 'text', text },
-        { type: 'image_url', image_url: { url: imageDataUrl } },
+        { type: 'image_url', image_url: { url: imageUrl } },
     ];
 };
 
@@ -695,25 +699,66 @@ const getRewriteSystemPrompt = (tone: string): string => {
 };
 
 export const registerGenerateRoutes = (app: Hono<{ Bindings: Bindings }>) => {
+    app.post('/generate/image', async (c) => {
+        const { errorResponse, user } = await requireUser(c);
+        if (errorResponse || !user) return errorResponse;
+
+        const formData = await c.req.formData();
+        const file = formData.get('file');
+
+        if (!(file instanceof File)) {
+            return c.json({ success: false, error: '업로드할 파일이 없습니다.' }, 400);
+        }
+
+        if (!ALLOWED_GENERATION_IMAGE_TYPES.has(file.type)) {
+            return c.json({ success: false, error: 'JPG, PNG, WebP 파일만 업로드 가능합니다.' }, 400);
+        }
+
+        if (file.size > MAX_GENERATION_IMAGE_SIZE_BYTES) {
+            return c.json({ success: false, error: '파일 크기는 2MB 이하여야 합니다.' }, 400);
+        }
+
+        const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+        const objectPath = `${user.id}/${Date.now()}-${crypto.randomUUID()}.${extension}`;
+
+        const supabaseAdmin = getSupabaseAdmin(c.env);
+        const { error: uploadError } = await supabaseAdmin.storage
+            .from(GENERATION_IMAGE_BUCKET)
+            .upload(objectPath, file, {
+                contentType: file.type,
+                upsert: false,
+            });
+
+        if (uploadError) {
+            const message = uploadError.message?.includes('Bucket not found')
+                ? 'generation-images 스토리지 버킷이 없습니다. Supabase migration 적용이 필요합니다.'
+                : '이미지 업로드에 실패했습니다.';
+            return c.json({ success: false, error: message }, 500);
+        }
+
+        const { data } = supabaseAdmin.storage
+            .from(GENERATION_IMAGE_BUCKET)
+            .getPublicUrl(objectPath);
+
+        return c.json({ success: true, url: data.publicUrl });
+    });
+
     app.post('/generate', async (c) => {
         try {
             const body = await c.req.json();
-            const { businessType, content, tone, purpose, todayContext, imageDataUrl } = body as {
+            const { businessType, content, tone, purpose, todayContext, imageUrl } = body as {
                 businessType: string;
                 content: string;
                 tone: string;
                 purpose: string;
                 todayContext?: TodayContext;
-                imageDataUrl?: string;
+                imageUrl?: string;
             };
 
-            const normalizedImageDataUrl = typeof imageDataUrl === 'string' ? imageDataUrl.trim() : '';
-            const hasImageInput = /^data:image\/(jpeg|jpg|png|webp);base64,/i.test(normalizedImageDataUrl);
-            if (normalizedImageDataUrl && !hasImageInput) {
+            const normalizedImageUrl = typeof imageUrl === 'string' ? imageUrl.trim() : '';
+            const hasImageInput = /^https?:\/\//i.test(normalizedImageUrl);
+            if (normalizedImageUrl && !hasImageInput) {
                 return c.json({ error: 'Unsupported image format' }, 400);
-            }
-            if (normalizedImageDataUrl.length > 1_700_000) {
-                return c.json({ error: 'Image payload too large' }, 400);
             }
 
             const { errorResponse, user } = await requireUser(c);
@@ -785,11 +830,11 @@ contentType은 아래 중 하나만 쓴다:
 - 날씨: ${contextWeather || '미입력'}
 - 재고/운영상황: ${contextInventory || '미입력'}
 - 손님 반응: ${contextReaction || '미입력'}
-사진이 있으면 사진에서 보이는 핵심 장면도 함께 정리해줘.`, hasImageInput ? normalizedImageDataUrl : undefined),
+사진이 있으면 사진에서 보이는 핵심 장면도 함께 정리해줘.`, hasImageInput ? normalizedImageUrl : undefined),
                         },
                     ],
                     response_format: { type: 'json_object' },
-                    temperature: 0.2,
+                    temperature: 1,
                 });
 
                 const parsedBrief = parseStructuredBrief(briefCompletion.choices[0]?.message?.content);
@@ -1192,7 +1237,10 @@ JSON {"caption":"..."}만 출력.`,
                     tone,
                     goal: purpose,
                     input_text: content,
-                    result_json: result,
+                    result_json: {
+                        ...result,
+                        imageUrl: normalizedImageUrl || null,
+                    },
                 })
                 .select()
                 .single();
@@ -1202,7 +1250,7 @@ JSON {"caption":"..."}만 출력.`,
                 return c.json({ error: 'Failed to save generation' }, 500);
             }
 
-            return c.json({ id: generation.id, ...result });
+            return c.json({ id: generation.id, ...result, imageUrl: normalizedImageUrl || null });
         } catch (error) {
             console.error('Generate error:', error);
             return c.json({ error: 'Failed to generate content' }, 500);
@@ -1226,6 +1274,7 @@ JSON {"caption":"..."}만 출력.`,
             hashtags: data.result_json.hashtags,
             storyPhrases: data.result_json.storyPhrases,
             engagementQuestion: data.result_json.engagementQuestion,
+            imageUrl: data.result_json.imageUrl,
             businessType: data.industry,
             createdAt: data.created_at,
         });

@@ -6,9 +6,49 @@ interface ResultsViewProps {
 }
 
 export default function ResultsView({ post }: ResultsViewProps) {
-    const copyToClipboard = (text: string) => {
-        navigator.clipboard.writeText(text);
+    const fullCaption = [post.caption, post.hashtags.join(' ')].filter(Boolean).join('\n\n');
+    const isMobile =
+        typeof navigator !== 'undefined' &&
+        /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+
+    const copyToClipboard = async (text: string) => {
+        await navigator.clipboard.writeText(text);
         alert("클립보드에 복사되었습니다!");
+    };
+
+    const openInstagram = async () => {
+        try {
+            await navigator.clipboard.writeText(fullCaption);
+        } catch (error) {
+            console.error('Clipboard copy failed before opening Instagram:', error);
+        }
+
+        if (isMobile) {
+            const instagramAppUrl = 'instagram://app';
+            const fallbackUrl = 'https://www.instagram.com/';
+
+            if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+                try {
+                    await navigator.share({
+                        text: fullCaption,
+                        url: post.imageUrl,
+                    });
+                    return;
+                } catch (error) {
+                    console.error('Web Share failed, falling back to Instagram app open:', error);
+                }
+            }
+
+            window.location.href = instagramAppUrl;
+            window.setTimeout(() => {
+                window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
+            }, 600);
+            alert('캡션을 복사했습니다. 인스타 앱이 열리면 붙여넣어 사용하세요.');
+            return;
+        }
+
+        window.open('https://www.instagram.com/', '_blank', 'noopener,noreferrer');
+        alert('캡션을 복사했습니다. 인스타 웹에서 붙여넣어 사용하세요.');
     };
 
     return (
@@ -16,21 +56,55 @@ export default function ResultsView({ post }: ResultsViewProps) {
             <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-gray-200 dark:border-white/10 pb-6 mb-10">
                 <div>
                     <h1 className="text-3xl md:text-4xl font-black tracking-tight text-text-main dark:text-white">오늘 인스타 고민 해결!</h1>
-                    <p className="text-text-sub dark:text-gray-400 text-lg mt-2">지금 복사해서 인스타에 붙여넣으세요.</p>
+                    <p className="text-text-sub dark:text-gray-400 text-lg mt-2">
+                        {isMobile ? '캡션 복사 후 인스타 앱으로 이어서 올리세요.' : '캡션 복사 후 인스타 웹에서 바로 이어서 올리세요.'}
+                    </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                     <span className="inline-flex items-center rounded-full bg-green-50 px-3 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
                         <span className="material-symbols-outlined text-sm mr-1">check_circle</span> 생성 완료
                     </span>
+                    <button
+                        onClick={() => copyToClipboard(fullCaption)}
+                        className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary ring-1 ring-inset ring-primary/20 hover:bg-primary/15 transition-colors"
+                    >
+                        <span className="material-symbols-outlined text-sm mr-1">content_copy</span> 전체 복사
+                    </button>
+                    <button
+                        onClick={openInstagram}
+                        className="inline-flex items-center rounded-full bg-zinc-900 px-3 py-1 text-xs font-medium text-white hover:bg-zinc-800 transition-colors"
+                    >
+                        <span className="material-symbols-outlined text-sm mr-1">{isMobile ? 'share' : 'open_in_new'}</span>
+                        {isMobile ? '인스타로 이어서' : '인스타 웹 열기'}
+                    </button>
                 </div>
             </header>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 <div className="lg:col-span-7 space-y-6">
-                    {post.imageDataUrl && (
+                    <div className="bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-gray-100 dark:border-white/10 p-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <button
+                                onClick={() => copyToClipboard(fullCaption)}
+                                className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-white font-bold py-3 px-4 hover:bg-primary-hover transition-colors"
+                            >
+                                <span className="material-symbols-outlined text-base">content_copy</span>
+                                전체 복사
+                            </button>
+                            <button
+                                onClick={openInstagram}
+                                className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-900 text-white font-bold py-3 px-4 hover:bg-zinc-800 transition-colors"
+                            >
+                                <span className="material-symbols-outlined text-base">{isMobile ? 'share' : 'open_in_new'}</span>
+                                {isMobile ? '인스타로 이어서' : '인스타 웹 열기'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {post.imageUrl && (
                         <div className="bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-gray-100 dark:border-white/10 p-4">
                             <div className="rounded-xl overflow-hidden bg-background-light dark:bg-black/30">
-                                <img src={post.imageDataUrl} alt="생성에 사용한 이미지" className="w-full h-auto object-cover" />
+                                <img src={post.imageUrl} alt="생성에 사용한 이미지" className="w-full h-auto object-cover" />
                             </div>
                         </div>
                     )}
