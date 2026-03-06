@@ -24,14 +24,35 @@ export default function ResultsView({ post }: ResultsViewProps) {
         }
 
         if (isMobile) {
-            const instagramAppUrl = 'instagram://app';
-            const fallbackUrl = 'https://www.instagram.com/';
-
             if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+                if (post.imageUrl) {
+                    try {
+                        const imageRes = await fetch(post.imageUrl);
+                        if (imageRes.ok) {
+                            const blob = await imageRes.blob();
+                            const mime = blob.type || 'image/jpeg';
+                            const ext = mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : 'jpg';
+                            const shareFile = new File([blob], `sajangnim-caption-${Date.now()}.${ext}`, { type: mime });
+                            const canShareFiles =
+                                typeof navigator.canShare === 'function' &&
+                                navigator.canShare({ files: [shareFile] });
+
+                            if (canShareFiles) {
+                                await navigator.share({
+                                    files: [shareFile],
+                                    text: fullCaption,
+                                });
+                                return;
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Image file share failed, fallback to text share:', error);
+                    }
+                }
+
                 try {
                     await navigator.share({
                         text: fullCaption,
-                        url: post.imageUrl,
                     });
                     return;
                 } catch (error) {
@@ -39,11 +60,14 @@ export default function ResultsView({ post }: ResultsViewProps) {
                 }
             }
 
-            window.location.href = instagramAppUrl;
+            window.location.href = 'instagram://camera';
             window.setTimeout(() => {
-                window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
-            }, 600);
-            alert('캡션을 복사했습니다. 인스타 앱이 열리면 붙여넣어 사용하세요.');
+                window.location.href = 'instagram://app';
+            }, 400);
+            window.setTimeout(() => {
+                window.location.href = 'https://www.instagram.com/';
+            }, 1200);
+            alert('모바일 웹에서는 인스타 피드 작성 화면으로 직접 이동이 제한됩니다. 캡션은 복사해두었습니다.');
             return;
         }
 
@@ -75,7 +99,7 @@ export default function ResultsView({ post }: ResultsViewProps) {
                         className="inline-flex items-center rounded-full bg-zinc-900 px-3 py-1 text-xs font-medium text-white hover:bg-zinc-800 transition-colors"
                     >
                         <span className="material-symbols-outlined text-sm mr-1">{isMobile ? 'share' : 'open_in_new'}</span>
-                        {isMobile ? '인스타로 이어서' : '인스타 웹 열기'}
+                        {isMobile ? '인스타 공유' : '인스타 웹 열기'}
                     </button>
                 </div>
             </header>
@@ -96,7 +120,7 @@ export default function ResultsView({ post }: ResultsViewProps) {
                                 className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-900 text-white font-bold py-3 px-4 hover:bg-zinc-800 transition-colors"
                             >
                                 <span className="material-symbols-outlined text-base">{isMobile ? 'share' : 'open_in_new'}</span>
-                                {isMobile ? '인스타로 이어서' : '인스타 웹 열기'}
+                                {isMobile ? '인스타 공유' : '인스타 웹 열기'}
                             </button>
                         </div>
                     </div>
